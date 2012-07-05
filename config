@@ -1,0 +1,15 @@
+network.host localhost
+network.port 8888
+component.password secret
+component.hostname conference.localhost
+parser.library libmukite.so
+parser.data_file rooms.data
+parser.config_file mukite.cfg
+parser.threads = 7
+parser.buffer = 1048576
+recovery.stanza_size 65536
+reader.queue 1024
+reader.block 0
+reader.buffer 1048576
+writer.buffer 1048576
+logger.level 1
