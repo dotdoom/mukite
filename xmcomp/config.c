@@ -7,7 +7,7 @@
 #define READ_CONFIG_STR(name, level) \
 	if (!strcmp(cfg_opt_name, #name)) { \
 		fscanf(file, "%1023s", cfg_opt_str); \
-		if (!(cfg_change_type & CONFIG_CHANGE_ ## level)) { \
+		if ((cfg_change_type & CONFIG_CHANGE_ ## level) != CONFIG_CHANGE_ ## level) { \
 			if (strcmp(cfg_opt_str, config->name)) { \
 				cfg_change_type = CONFIG_CHANGE_ ## level; \
 			} \
@@ -18,7 +18,7 @@
 #define READ_CONFIG_INT(name, level) \
 	if (!strcmp(cfg_opt_name, #name)) { \
 		fscanf(file, "%d", &cfg_opt_int); \
-		if (!(cfg_change_type & CONFIG_CHANGE_ ## level)) { \
+		if ((cfg_change_type & CONFIG_CHANGE_ ## level) != CONFIG_CHANGE_ ## level) { \
 			if (cfg_opt_int != config->name) { \
 				cfg_change_type |= CONFIG_CHANGE_ ## level; \
 			} \
@@ -45,8 +45,8 @@ int config_read(FILE *file, XmcompConfig *config, char allow_hostname_change) {
 		READ_CONFIG_STR(component.password, RECONNECT)
 		// XXX(artem): we should find a better way for hostname handling
 		if (allow_hostname_change && !strcmp(cfg_opt_name, "component.hostname")) {
-			READ_CONFIG_STR(component.hostname, RECONNECT)
-		}
+			READ_CONFIG_STR(component.hostname, RECONNECT);
+		} else
 
 		READ_CONFIG_INT(reader.buffer, NO_RESTART)
 		READ_CONFIG_INT(reader.block, NO_RESTART)
@@ -61,7 +61,7 @@ int config_read(FILE *file, XmcompConfig *config, char allow_hostname_change) {
 		READ_CONFIG_INT(parser.threads, NOTIFY_LIBRARY)
 		READ_CONFIG_INT(parser.buffer, NOTIFY_LIBRARY)
 
-		READ_CONFIG_INT(logger.level, NO_RESTART)
+		READ_CONFIG_INT(logger.level, NOTIFY_LIBRARY)
 
 		LWARN("unknown option %s", cfg_opt_name);
 	}

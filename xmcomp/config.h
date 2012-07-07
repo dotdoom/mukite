@@ -53,6 +53,6 @@ typedef struct {
 #define CONFIG_CHANGE_RESTART_WRITER 16
 // There are changes requiring connection reset (reauth or host/port change)
 #define CONFIG_CHANGE_RECONNECT 32
-int config_read(FILE *, XmcompConfig *);
+int config_read(FILE *, XmcompConfig *, char allow_hostname_change);
 
 #endif

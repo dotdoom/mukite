@@ -17,7 +17,8 @@ XmcompConfig *config = 0;
 pid_t wrapper = 0;
 
 void reload_config(int signal) {
-	config_read(stdin, config);
+	config_read(stdin, config, !signal);
+	log_level = config->logger.level;
 	if (wrapper > 0 && wrapper != (pid_t)-1) {
 		kill(wrapper, SIGHUP);
 	}
@@ -82,9 +83,7 @@ int main(int argc, char **argv) {
 	config->writer.buffer = 1 << 20;
 	config->parser.threads = 3;
 	config->parser.buffer = 1 << 20;
-	config_read(stdin, config);
-
-	log_level = config->logger.level;
+	reload_config(0);
 
 	strncat(master_exec_name, config->component.hostname, CONFIG_OPTION_LENGTH);
 	strncat(wrapper_exec_name, config->component.hostname, CONFIG_OPTION_LENGTH);
