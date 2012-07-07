@@ -5,14 +5,14 @@ endif
 
 CC=gcc
 BARE_CFLAGS=-fPIC -g -Wall
-CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DVERSION=$(REVISION)
+CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DVERSION=$(REVISION) -DLOG_PTHREAD -DLOG_CTIME
 LDFLAGS=-pthread
 UNAME=$(shell uname)
 
 LIBRARY=libmukite
-WRAPPER=xmcomp/xcwrapper
+WRAPPER=xmcomp/xmcomp
 
-SOURCES=$(LIBRARY).c parser.c router.c builder.c jid.c
+SOURCES=$(LIBRARY).c xmcomp/queue.c xmcomp/cbuffer.c xmcomp/config.c #parser.c router.c builder.c jid.c
 OBJECTS=$(SOURCES:.c=.o)
 
 all: $(LIBRARY).so $(WRAPPER)

@@ -1,15 +1,62 @@
+# XMPP Component configuration file
+# Use: xmcomponent <config
+# to run xmcomp using this configuration.
+# Lines starting with '#' are considered comments
+
+# Network settings.
+# TCP server (resolved with A record)
 network.host localhost
+# TCP port
 network.port 8888
-component.password secret
+
+## Authorization options.
+# A hostname to open stream to
 component.hostname conference.localhost
-parser.library libmukite.so
+# A password for <handshake>
+component.password secret
+
+## Parser library options.
+# This option is mandatory. Provide a path to the component library
+parser.library ./libmukite.so
+# The rest is read by library itself and some arguments may be not required
 parser.data_file rooms.data
 parser.config_file mukite.cfg
-parser.threads = 7
-parser.buffer = 1048576
-recovery.stanza_size 65536
+parser.threads 7
+parser.buffer 1048576
+
+## Reader (executed inside of wrapper) config.
+# Queue size is the maximum number of stanzas being kept ready to be processed.
+# If you see queue.stats.overflows increasing, it could be reasonable to make this number larger.
+# Changing this option requires wrapper restart
 reader.queue 1024
+# A size of single stanza block. If 0, the buffer is always resized automatically. Although this
+# saves some memory, it can lead to memory fragmentation and excessive CPU usage.
+# If you set a number larger than zero, you should ensure it is large enough to keep a stanza (e.g. 65536 bytes).
+# Stanzas not matching the size are silently (in terms of XMPP) dropped and produce a warning.
+# When set to 0, see queue.stats.realloc_enlarges and realloc_shortens to have a view on how the things are going.
+# queue.stats.mallocs may be helpful to find out queue usage.
+# Changing this option does not require restart and the value will be grabbed for the next incoming stanza
 reader.block 0
+# Network buffer size for the reader. This should be large enough to hold at least one stanza. If it does not,
+# it is enlargened to 1MB and a warning is issued. If 1MB is not enough, an error occurs and reader thread dies.
+# Too small values will affect performance on a high-loaded component and too high values affect memory.
+# Changing this option does not require restart and the value will be grabbed for the next incoming stanza
 reader.buffer 1048576
+# This value is used for RECOVERY MODE only. This should match the setting in your XMPP server. If it is smaller,
+# chances are that recovery occures faster, but risks are that recovery never succeeds (if all stanzas are too large).
+# If this is larger, the recovery can take longer.
+# Changing this option only affects restarted component
+reader.max_stanza_size 65536
+
+## Writer (executed inside of master) config.
+# A cyclic buffer size for the writer. Should be large enough to keep at least single output stanza.
+# Changing this option requires master restart.
 writer.buffer 1048576
+
+## Logger config
+# Logging output filter. Log messages lower than this level will not be printed
+# 0 - debug
+# 1 - info
+# 2 - warning
+# 3 - error
 logger.level 1

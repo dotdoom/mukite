@@ -5,11 +5,11 @@ endif
 
 CC=gcc
 BARE_CFLAGS=-fPIC -g -Wall
-CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DVERSION=$(REVISION)
+CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DVERSION=$(REVISION) -DLOG_PTHREAD -DLOG_CTIME
 LDFLAGS=-pthread
 UNAME=$(shell uname)
 
-EXECUTABLE=xcmaster
+EXECUTABLE=xmcomp
 
 SOURCES=$(EXECUTABLE).c writer.c reader.c logger.c network.c xmlfsm.c queue.c cbuffer.c config.c xcwrapper.c
 OBJECTS=$(SOURCES:.c=.o) sha1/sha1.o

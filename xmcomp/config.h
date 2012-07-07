@@ -1,6 +1,9 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include "reader.h"
+#include "writer.h"
+
 #include <stdio.h>
 #define CONFIG_OPTION_LENGTH 1024
 
@@ -36,14 +39,20 @@ typedef struct {
 	} logger;
 } XmcompConfig;
 
-#define CONFIG_STATIC 0
-#define CONFIG_LIBRARY_CHANGED 1
-#define CONFIG_WRAPPER_CHANGED 2
-#define CONFIG_MASTER_CHANGED 3
+// Actions to take, depending on config changes:
+#define CONFIG_CHANGE_NONE 0
+// There are changes which can be applied immediately, w/o any restarts
+#define CONFIG_CHANGE_NO_RESTART 1
+// There are changes that require component library reloading (typically filename change)
+#define CONFIG_CHANGE_RELOAD_LIBRARY 2
+// There are changes that component library may be interested in, and handle as appropriate (typically parser config)
+#define CONFIG_CHANGE_NOTIFY_LIBRARY 4
+// There are changes that require wrapper process restart (reader hard changes)
+#define CONFIG_CHANGE_RESTART_READER 8
+// There are changes that require writer restart
+#define CONFIG_CHANGE_RESTART_WRITER 16
+// There are changes requiring connection reset (reauth or host/port change)
+#define CONFIG_CHANGE_RECONNECT 32
 int config_read(FILE *, XmcompConfig *);
-void config_write(FILE *, XmcompConfig *);
-
-void config_apply_to_master(XmcompConfig *, WriterConfig *);
-void config_apply_to_wrapper(XmcompConfig *, ReaderConfig *);
 
 #endif

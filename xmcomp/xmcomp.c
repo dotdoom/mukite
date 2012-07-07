@@ -23,10 +23,7 @@ void reload_config(int signal) {
 	}
 }
 
-int master_main(XmcompConfig *, WriterConfig *) {
-}
-
-char *shm_alloc(char name_postfix, int size) {
+char *shm_alloc(char *name_postfix, int size) {
 	int fd;
 	char *data;
 	char name[CONFIG_OPTION_LENGTH] = "/xmcomp.";
@@ -78,7 +75,7 @@ int main(int argc, char **argv) {
 	config = malloc(sizeof(*config));
 	memset(config, 0, sizeof(config));
 	// Some defaults
-	config->recovery.stanza_size = 65536;
+	config->reader.max_stanza_size = 65536;
 	config->reader.block = 0;
 	config->reader.buffer = 1 << 20;
 	config->reader.queue = 1024;
@@ -94,8 +91,8 @@ int main(int argc, char **argv) {
 	strcpy(argv[0], master_exec_name);
 
 	shm = shm_alloc(config->component.hostname,
-			sizeof(*config),
-			sizeof(*writer_config),
+			sizeof(*config) +
+			sizeof(*writer_config) +
 			config->writer.buffer);
 	memcpy(shm, config, sizeof(*config));
 	free(config);
@@ -148,21 +145,22 @@ int main(int argc, char **argv) {
 				strcpy(argv[0], wrapper_exec_name);
 				return wrapper_main(config, writer_config);
 			}
+			LINFO("waiting for subprocess, PID %d", wrapper);
 			while (wrapper != (pid_t)-1) {
-				LINFO("waiting for child process PID %d", wrapper);
 				wrapper = wait(&wrapper_stat_loc);
-				if (wrapper == -1) {
-					LWARN("signal received while waiting for child process");
-				} else {
+				if (wrapper != -1) {
 					if (wrapper != (pid_t)-1) {
 						if (WIFEXITED(wrapper_stat_loc)) {
-							LINFO("subprocess exited with code %d", WEXITSTATUS(wrapper_stat_loc));
+							LINFO("PID %d exited with code %d",
+									wrapper, WEXITSTATUS(wrapper_stat_loc));
 						} else if (WIFSIGNALED(wrapper_stat_loc)) {
-							LWARN("subprocess killed by signal %d", WTERMSIG(wrapper_stat_loc));
+							LWARN("PID %d killed by signal %d",
+									wrapper, WTERMSIG(wrapper_stat_loc));
 						} else if (WIFSTOPPED(wrapper_stat_loc)) {
-							LWARN("subprocess stopped by signal %d; waiting", WSTOPSIG(wrapper_stat_loc));
+							LWARN("PID %d stopped by signal %d; waiting",
+									wrapper, WSTOPSIG(wrapper_stat_loc));
 						} else if (WIFCONTINUED(wrapper_stat_loc)) {
-							LWARN("subprocess continued; waiting");
+							LWARN("PID %d continued; waiting", wrapper);
 						}
 					}
 				}
