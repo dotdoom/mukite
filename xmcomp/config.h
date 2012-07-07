@@ -1,5 +1,5 @@
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef XMCOMP_CONFIG_H
+#define XMCOMP_CONFIG_H
 
 #include "reader.h"
 #include "writer.h"

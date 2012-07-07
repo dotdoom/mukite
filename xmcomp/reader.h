@@ -1,5 +1,5 @@
-#ifndef READER_H
-#define READER_H
+#ifndef XMCOMP_READER_H
+#define XMCOMP_READER_H
 
 #include "queue.h"
 

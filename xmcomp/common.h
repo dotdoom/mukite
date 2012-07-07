@@ -1,5 +1,5 @@
-#ifndef COMMON_H
-#define COMMON_H
+#ifndef XMCOMP_COMMON_H
+#define XMCOMP_COMMON_H
 
 #include <stdlib.h>
 #include <stdio.h>

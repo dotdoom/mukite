@@ -1,5 +1,5 @@
-#ifndef XCWRAPPER_H
-#define XCWRAPPER_H
+#ifndef XMCOMP_XCWRAPPER_H
+#define XMCOMP_XCWRAPPER_H
 
 #include "config.h"
 #include "writer.h"

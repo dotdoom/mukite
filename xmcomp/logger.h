@@ -1,5 +1,5 @@
-#ifndef LOGGER_H
-#define LOGGER_H
+#ifndef XMCOMP_LOGGER_H
+#define XMCOMP_LOGGER_H
 
 #include <stdio.h>
 #include <time.h>

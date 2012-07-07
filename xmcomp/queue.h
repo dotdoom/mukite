@@ -2,8 +2,8 @@
  * This is an implementation of a 2-stage queue
  */
 
-#ifndef QUEUE_H
-#define QUEUE_H
+#ifndef XMCOMP_QUEUE_H
+#define XMCOMP_QUEUE_H
 
 #include <pthread.h>
 

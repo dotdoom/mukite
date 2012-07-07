@@ -1,5 +1,5 @@
-#ifndef NETWORK_H
-#define NETWORK_H
+#ifndef XMCOMP_NETWORK_H
+#define XMCOMP_NETWORK_H
 
 #include "common.h"
 

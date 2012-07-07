@@ -1,5 +1,5 @@
-#ifndef WRITER_H
-#define WRITER_H
+#ifndef XMCOMP_WRITER_H
+#define XMCOMP_WRITER_H
 
 #include "cbuffer.h"
 

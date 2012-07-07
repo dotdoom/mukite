@@ -1,5 +1,5 @@
-#ifndef XMLFSM_H
-#define XMLFSM_H
+#ifndef XMCOMP_XMLFSM_H
+#define XMCOMP_XMLFSM_H
 
 #include "common.h"
 

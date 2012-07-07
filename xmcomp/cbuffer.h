@@ -2,8 +2,8 @@
  * This implements a cyclic buffer
  */
 
-#ifndef CBUFFER_H
-#define CBUFFER_H
+#ifndef XMCOMP_CBUFFER_H
+#define XMCOMP_CBUFFER_H
 
 #include <pthread.h>
 
