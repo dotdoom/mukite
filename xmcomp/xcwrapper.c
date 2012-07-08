@@ -37,7 +37,7 @@ static void *dlsym_m(void *handle, char *symbol) {
 	return ptr;
 }
 
-static int push_library() {
+static BOOL push_library() {
 	LINFO("(re)loading component library");
 
 	struct LibraryEntry new_lib;
@@ -45,7 +45,12 @@ static int push_library() {
 	new_lib.module = dlopen(config->parser.library, RTLD_LAZY | RTLD_LOCAL);
 	if (!new_lib.module) {
 		LERROR("cannot open new library %s: %s", config->parser.library, dlerror());
-		return 0;
+		return FALSE;
+	}
+
+	if (new_lib.module == library.module) {
+		LERROR("new library is the same file, aborting reload");
+		return FALSE;
 	}
 
 	if (!(new_lib.start = dlsym_m(new_lib.module, "start")) ||
@@ -53,7 +58,7 @@ static int push_library() {
 			!(new_lib.stop = dlsym_m(new_lib.module, "stop")) ||
 			!(new_lib.reconfigure = dlsym_m(new_lib.module, "reconfigure"))) {
 		dlclose(new_lib.module);
-		return 0;
+		return FALSE;
 	}
 
 	LINFO("applying new component library configuration");
@@ -71,7 +76,7 @@ static int push_library() {
 			dlclose(library.module);
 		}
 		library = new_lib;
-		return 1;
+		return TRUE;
 	} else {
 		LERROR("new library failed to start");
 		dlclose(new_lib.module);
@@ -81,7 +86,7 @@ static int push_library() {
 				LFATAL("old library failed to start, no parsers are available. Exiting");
 			}
 		}
-		return 0;
+		return FALSE;
 	}
 }
 
