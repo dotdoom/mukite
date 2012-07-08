@@ -15,6 +15,10 @@
 #define VERSION -1
 #endif
 
+#define BOOL char
+#define TRUE 1
+#define FALSE 0
+
 typedef struct {
 	char *data;
 	int size;

@@ -1,11 +1,12 @@
 #ifndef XMCOMP_WRITER_H
 #define XMCOMP_WRITER_H
 
+#include "network.h"
 #include "cbuffer.h"
 
 typedef struct {
 	char enabled;
-	int socket;
+	Socket socket;
 	CBuffer cbuffer;
 } WriterConfig;
 

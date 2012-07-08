@@ -9,10 +9,20 @@
 
 #define STANDARD_BUFFER_SIZE 1024
 
-int net_connect(char *host, int port) {
+#define VERIFY_CONNECTED(retval) { \
+		if (!sock->connected) { \
+			LERROR("socket %d is not connected", sock->socket); \
+			return retval; \
+		} \
+	} \
+
+BOOL net_connect(Socket *sock, char *host, int port) {
 	struct sockaddr_in server_addr;
 	struct hostent *s_ent;
-	int sock, error;
+	int error;
+
+	sock->connected = FALSE;
+	sock->socket = 0;
 
 	LDEBUG("connecting to '%s:%d'", host, port);
 
@@ -25,76 +35,79 @@ int net_connect(char *host, int port) {
 		s_ent = gethostbyname(host);
 		if (!s_ent) {
 			LERROR("cannot resolve host '%s'", host);
-			return -1;
+			return FALSE;
 		}
 		server_addr.sin_family = s_ent->h_addrtype;
 		memcpy(&server_addr.sin_addr, s_ent->h_addr, s_ent->h_length);
 	}
-	sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	sock->socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 
-	if (sock == -1) {
+	if (sock->socket == -1) {
 		error = errno;
-		LERROR("cannot create socket: %d: %s", error, strerror(error));
-		return -1;
+		LERRNO("cannot create socket", error);
+		return FALSE;
 	}
 
-	if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr))) {
+	if (connect(sock->socket, (struct sockaddr *)&server_addr, sizeof(server_addr))) {
 		error = errno;
-		LERROR("cannot connect: %d: %s", error, strerror(error));
-		close(sock);
-		return -1;
+		LERRNO("cannot connect", error);
+		close(sock->socket);
+		return FALSE;
 	}
 
-	LDEBUG("connected to '%s:%d', socket %d", host, port, sock);
+	sock->connected = TRUE;
+	LDEBUG("connected to '%s:%d', socket %d", host, port, sock->socket);
 
-	return sock;
+	return TRUE;
 }
 
-int net_send(int sock, char *data, int size) {
+int net_send(Socket *sock, char *data, int size) {
 	int bytes_sent, error;
-	
-	LDEBUG("sending %d bytes via %d: '%.*s'", size, sock, size, data);
-	bytes_sent = send(sock, data, size, 0);
+
+	LDEBUG("sending %d bytes via %d: '%.*s'", size, sock->socket, size, data);
+	VERIFY_CONNECTED(0);
+
+	bytes_sent = send(sock->socket, data, size, 0);
 	LDEBUG("%d bytes sent", bytes_sent);
 
 	if (bytes_sent < 0) {
 		error = errno;
-		LERROR("failed to send buffer of size %d via %d: %d: %s",
-				size, sock, error, strerror(error));
+		LERRNO("failed to send buffer of size %d via %d", size, sock->socket, error);
 		return -1;
 	}
 
 	return bytes_sent;
 }
 
-int net_send_all(int sock, char *data, int size) {
+BOOL net_send_all(Socket *sock, char *data, int size) {
 	int bytes_sent, error;
 
-	LDEBUG("sending %d bytes via %d: '%.*s'", size, sock, size, data);
+	LDEBUG("sending %d bytes via %d: '%.*s'", size, sock->socket, size, data);
+	VERIFY_CONNECTED(FALSE);
 
 	while (size > 0) {
-		bytes_sent = send(sock, data, size, 0);
+		bytes_sent = send(sock->socket, data, size, 0);
 		if (bytes_sent < 0) {
 			error = errno;
-			LERROR("failed to send %d bytes via %d: %d: %s",
-					size, sock, error, strerror(error));
-			return -1;
+			LERRNO("failed to send %d bytes via %d", size, sock->socket, error);
+			return FALSE;
 		}
 
 		size -= bytes_sent;
 		data += bytes_sent;
 	}
 
-	return 0;
+	return TRUE;
 }
 
 #define HANDSHAKE_SUCCESS "<handshake/>"
-int authorize(int sock, char *id, char *pass) {
+BOOL authorize(Socket *sock, char *id, char *pass) {
 	char buffer[STANDARD_BUFFER_SIZE];
 	int length;
 	SHA1Context sha;
 
-	LDEBUG("authorizing for id '%s' on %d", id, sock);
+	LDEBUG("authorizing for id '%s'", id);
+	VERIFY_CONNECTED(FALSE);
 
 	strncpy(buffer, id, STANDARD_BUFFER_SIZE);
 	strncat(buffer, pass, STANDARD_BUFFER_SIZE - strlen(buffer) - 1);
@@ -103,7 +116,7 @@ int authorize(int sock, char *id, char *pass) {
 	SHA1Input(&sha, (unsigned char *)buffer, strlen(buffer));
 	if (!SHA1Result(&sha)) {
 		LERROR("failed to compute SHA1 digest for authentication");
-		return 1;
+		return FALSE;
 	}
 
 	strcpy(buffer, "<handshake>");
@@ -115,32 +128,33 @@ int authorize(int sock, char *id, char *pass) {
 			sha.Message_Digest[4]);
 	strcat(buffer, "</handshake>");
 
-	if (net_send_all(sock, buffer, strlen(buffer))) {
+	if (!net_send_all(sock, buffer, strlen(buffer))) {
 		LERROR("failed to send SHA-1 handshake request");
-		return 1;
+		return FALSE;
 	}
 
 	length = net_recv(sock, buffer, STANDARD_BUFFER_SIZE-1);
-	if (length < 0) {
+	if (length <= 0) {
 		LERROR("failed to receive handshake response");
-		return 1;
+		return FALSE;
 	}
 
 	buffer[length] = 0;
 	if (strcmp(buffer, HANDSHAKE_SUCCESS)) {
 		LERROR("cannot authorize: server acknowledgement is '%s', expected '%s'",
 				buffer, HANDSHAKE_SUCCESS);
-		return 1;
+		return FALSE;
 	}
 
-	return 0;
+	return TRUE;
 }
 
-int net_stream(int sock, char *from, char *to, char *pass) {
+BOOL net_stream(Socket *sock, char *from, char *to, char *pass) {
 	char buffer[STANDARD_BUFFER_SIZE], quote[2] = { 0, 0 }, *id_start, *id_end;
 	int length;
 
-	LDEBUG("opening stream from '%s' to '%s' on %d", from, to, sock);
+	LDEBUG("opening stream from '%s' to '%s'", from, to);
+	VERIFY_CONNECTED(FALSE);
 
 	length = sprintf(buffer,
 		"<?xml version='1.0'?> "
@@ -149,30 +163,30 @@ int net_stream(int sock, char *from, char *to, char *pass) {
 			"xmlns='jabber:component:accept' "
 			"to='%s' "
 			"from='%s'>", to, from);
-	if (net_send_all(sock, buffer, length)) {
-		LERROR("failed to send stream opening stanza from '%s' to '%s' via %d", from, to, sock);
-		return 1;
+	if (!net_send_all(sock, buffer, length)) {
+		LERROR("failed to send stream opening stanza from '%s' to '%s'", from, to);
+		return FALSE;
 	}
 
 	length = net_recv(sock, buffer, STANDARD_BUFFER_SIZE-1);
 	if (length < 0) {
-		LERROR("failed to receive stream opening stanza from '%s' via %d", to, sock);
-		return 1;
+		LERROR("failed to receive stream opening stanza from '%s'", to);
+		return FALSE;
 	}
 
 	buffer[length] = 0;
-	LDEBUG("received stanza '%s' from '%s' via %d", buffer, to, sock);
+	LDEBUG("received stanza '%s' from '%s'", buffer, to);
 
 	id_start = strstr(buffer, "id=");
 	if (!id_start) {
 		LERROR("failed to find 'id' attribute in the server response");
-		return 1;
+		return FALSE;
 	}
 
 	id_start += 3;
 	if (!*id_start) {
 		LERROR("malformed stanza received");
-		return 1;
+		return FALSE;
 	}
 	quote[0] = *id_start;
 
@@ -180,7 +194,7 @@ int net_stream(int sock, char *from, char *to, char *pass) {
 	id_end = strstr(id_start, quote);
 	if (!id_end) {
 		LERROR("malformed stanza received");
-		return 1;
+		return FALSE;
 	}
 
 	*id_end = 0;
@@ -189,20 +203,21 @@ int net_stream(int sock, char *from, char *to, char *pass) {
 	return authorize(sock, id_start, pass);
 }
 
-int net_unstream(int sock) {
+BOOL net_unstream(Socket *sock) {
 	static char *end_stream = "</stream:stream>";
 
-	LDEBUG("closing stream on %d", sock);
+	LDEBUG("closing XMPP stream");
+	VERIFY_CONNECTED(FALSE);
 
 	if (net_send_all(sock, end_stream, strlen(end_stream))) {
-		LERROR("failed to close stream on %d", sock);
-		return 1;
+		return TRUE;
 	}
 
-	return 0;
+	LERROR("failed to close XMPP stream");
+	return FALSE;
 }
 
-int net_recv(int sock, char *buffer, int size) {
+int net_recv(Socket *sock, char *buffer, int size) {
 /* Wait for "timeout" seconds for the socket to become readable
 readable_timeout(int sock, int timeout)
 {
@@ -228,22 +243,28 @@ readable_timeout(int sock, int timeout)
 
 	int bytes_received, error;
 
-	LDEBUG("receiving %d bytes via %d", size, sock);
+	LDEBUG("receiving %d bytes via %d", size, sock->socket);
+	VERIFY_CONNECTED(FALSE);
 
-	if ((bytes_received = recv(sock, buffer, size, 0)) < 0) {
+	if ((bytes_received = recv(sock->socket, buffer, size, 0)) < 0) {
 		error = errno;
-		LERROR("failed to receive %d bytes from socket %d: %d: %s",
-				size, sock, error, strerror(error));
+		LERRNO("failed to receive %d bytes from socket %d", size, sock->socket, error);
 		return -1;
 	}
 
 	LDEBUG("received %d bytes: '%.*s'", bytes_received, bytes_received, buffer);
 
+	if (!bytes_received) {
+		sock->connected = FALSE;
+		LERROR("connection gracefully closed by remote host on socket %d", sock->socket);
+	}
+
 	return bytes_received;
 }
 
-void net_disconnect(int sock) {
-	LDEBUG("disconnecting %d", sock);
-	shutdown(sock, SHUT_RDWR);
-	close(sock);
+void net_disconnect(Socket *sock) {
+	LDEBUG("disconnecting %d", sock->socket);
+	shutdown(sock->socket, SHUT_RDWR);
+	close(sock->socket);
+	sock->connected = FALSE;
 }

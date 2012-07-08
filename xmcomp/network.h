@@ -3,12 +3,17 @@
 
 #include "common.h"
 
-int net_connect(char *host, int port);
-int net_send(int sock, char *data, int size);
-int net_recv(int sock, char *buffer, int size);
-void net_disconnect(int sock);
+typedef struct {
+	int socket;
+	BOOL connected;
+} Socket;
 
-int net_stream(int sock, char *from, char *to, char *pass);
-int net_unstream(int sock);
+BOOL net_connect(Socket *, char *, int);
+int net_send(Socket *, char *, int);
+int net_recv(Socket *, char *, int);
+void net_disconnect(Socket *);
+
+BOOL net_stream(Socket *sock, char *from, char *to, char *password);
+BOOL net_unstream(Socket *);
 
 #endif

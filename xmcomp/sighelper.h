@@ -5,7 +5,7 @@
 
 typedef void (*SigHandler)(int);
 
-void sighelper_sigblock(int);
+void sighelper_sigblockall();
 void sighelper_sigaction(int, SigHandler);
 
 #endif

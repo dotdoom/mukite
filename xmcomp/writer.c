@@ -12,15 +12,13 @@ void *writer_thread_entry(void *void_config) {
 	CBuffer *cbuffer = &config->cbuffer;
 	int size;
 	LINFO("started");
-
-	// SIGHUP to be handled in main thread
-	sighelper_sigblock(SIGHUP);
+	sighelper_sigblockall();
 
 	while (config->enabled) {
 		size = cbuffer_get_chunk(cbuffer);
-		size = net_send(config->socket, cbuffer->read_position, size);
-		if (size < 0) {
-			LERROR("failed to send packet. Bailing out");
+		size = net_send(&config->socket, cbuffer->read_position, size);
+		if (size < 0 || !config->socket.connected) {
+			LERROR("unrecoverable network error detected, exiting");
 			break;
 		}
 		cbuffer_release_chunk(cbuffer, size);

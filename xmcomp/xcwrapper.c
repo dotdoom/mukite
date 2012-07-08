@@ -90,7 +90,7 @@ static void apply_config() {
 	config->reader_thread.queue.fixed_block_buffer_size = config->reader.block;
 	config->reader_thread.queue.network_buffer_size = config->reader.buffer;
 	config->reader_thread.recovery_stanza_size = config->reader.max_stanza_size;
-	config->reader_thread.socket = config->writer_thread.socket;
+	config->reader_thread.socket = &config->writer_thread.socket;
 	config->reader_thread.recovery_mode = config->reader.recovery_mode;
 }
 
@@ -117,7 +117,7 @@ int wrapper_main(XmcompConfig *_config) {
 	config = _config;
 
 	apply_config();
-	LINFO("starting wrapper in %s mode", config->reader.recovery_mode ? "recovery" : "normal");
+	LINFO("wrapper started in %s mode", config->reader.recovery_mode ? "recovery" : "normal");
 
 	queue_init(&config->reader_thread.queue, config->reader.queue);
 	config->reader_thread.enabled = 1;
@@ -134,6 +134,9 @@ int wrapper_main(XmcompConfig *_config) {
 	LINFO("reader exited, stopping component library");
 	(*library.stop)();
 	dlclose(library.module);
+
+	LINFO("sending zero byte to notify writer");
+	cbuffer_write(&config->writer_thread.cbuffer, "\0", 1);
 
 	return 0;
 }

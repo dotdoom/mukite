@@ -1,11 +1,12 @@
 #ifndef XMCOMP_READER_H
 #define XMCOMP_READER_H
 
+#include "network.h"
 #include "queue.h"
 
 typedef struct {
 	char enabled;
-	int socket;
+	Socket *socket;
 	char recovery_mode;
 	int recovery_stanza_size;
 	StanzaQueue queue;

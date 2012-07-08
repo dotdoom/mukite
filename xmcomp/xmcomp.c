@@ -99,19 +99,17 @@ int main(int argc, char **argv) {
 	while (1) {
 		LINFO("connecting to %s:%d", config->network.host, config->network.port);
 
-		config->writer_thread.socket = net_connect(config->network.host, config->network.port);
-		if (config->writer_thread.socket >= 0) {
+		if (net_connect(&config->writer_thread.socket, config->network.host, config->network.port)) {
 			LINFO("opening XMPP stream to %s", config->component.hostname);
-			if (net_stream(config->writer_thread.socket,
+			if (!net_stream(&config->writer_thread.socket,
 						"xmcomp",
 						config->component.hostname,
 						config->component.password)) {
-				net_disconnect(config->writer_thread.socket);
-				config->writer_thread.socket = -1;
+				net_disconnect(&config->writer_thread.socket);
 			}
 		}
 
-		if (config->writer_thread.socket < 0) {
+		if (!config->writer_thread.socket.connected) {
 			LERROR("retrying in %d second(s)", reconnect_delay);
 			sleep(reconnect_delay);
 			if (reconnect_delay < 60) {
@@ -174,8 +172,8 @@ int main(int argc, char **argv) {
 
 		LINFO("clearing writer buffer and disconnecting");
 		cbuffer_clear(&config->writer_thread.cbuffer);
-		net_unstream(config->writer_thread.socket);
-		net_disconnect(config->writer_thread.socket);
+		net_unstream(&config->writer_thread.socket);
+		net_disconnect(&config->writer_thread.socket);
 	}
 
 	return 0;

@@ -77,9 +77,7 @@ void *reader_thread_entry(void *void_config) {
 	char *current_stanza = 0, *continuous_block = 0;
 
 	LINFO("started");
-
-	// SIGHUP to be handled in main thread
-	sighelper_sigblock(SIGHUP);
+	sighelper_sigblockall();
 
 	network_buffer.data = malloc(network_buffer_size = queue->network_buffer_size);
 	network_buffer.end = network_buffer.data + network_buffer_size;
@@ -177,7 +175,7 @@ void *reader_thread_entry(void *void_config) {
 						network_buffer_size, queue->network_buffer_size);
 				continue;
 			} else {
-				LERROR("fatality: network buffer size (%d) is not large enough to keep a single stanza! Bailing out",
+				LERROR("fatality: network buffer (size %d) is not large enough to keep a single stanza! Bailing out",
 						network_buffer_size);
 				break;
 			}
@@ -186,15 +184,8 @@ void *reader_thread_entry(void *void_config) {
 		LDEBUG("reading %d bytes from network", continuous_block_size);
 		bytes_received = net_recv(config->socket, continuous_block, continuous_block_size);
 
-		if (!bytes_received) {
-			LERROR("connection gracefully closed by remote host on socket %d. Nothing to do here",
-					config->socket);
-			break;
-		}
-
-		if (bytes_received < 0) {
-			LERROR("attempt to receive a packet of size %d from network socket %d has failed",
-					continuous_block_size, config->socket);
+		if (bytes_received < 0 || !config->socket->connected) {
+			LERROR("unrecoverable network error detected, exiting");
 			break;
 		}
 

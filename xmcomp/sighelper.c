@@ -2,12 +2,11 @@
 
 #include "sighelper.h"
 
-void sighelper_sigblock(int signal) {
+void sighelper_sigblockall() {
 	sigset_t block_sigset;
 
-	sigemptyset(&block_sigset);
-	sigaddset(&block_sigset, signal);
-	pthread_sigmask(SIG_BLOCK, &block_sigset, 0);
+	sigfillset(&block_sigset);
+	pthread_sigmask(SIG_SETMASK, &block_sigset, 0);
 }
 
 void sighelper_sigaction(int signal, SigHandler handler) {
