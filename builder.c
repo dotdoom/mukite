@@ -32,11 +32,11 @@ static const char* affiliations[] = {
 	"owner"
 };
 static const int affiliation_sizes[] = {
-	7,
-	4,
-	6,
-	5,
-	5
+	sizeof(affiliations[0]),
+	sizeof(affiliations[1]),
+	sizeof(affiliations[2]),
+	sizeof(affiliations[3]),
+	sizeof(affiliations[4])
 };
 
 static const char* roles[] = {
@@ -45,9 +45,9 @@ static const char* roles[] = {
 	"moderator"
 };
 static const int role_sizes[] = {
-	7,
-	11,
-	9
+	sizeof(roles[0]),
+	sizeof(roles[1]),
+	sizeof(roles[2])
 };
 
 int build_mucadm_node(MucAdmNode *node, BuilderBuffer *buffer) {
