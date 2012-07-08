@@ -1,7 +1,9 @@
 #include <pthread.h>
+#include <signal.h>
 
 #include "network.h"
 #include "cbuffer.h"
+#include "sighelper.h"
 
 #include "writer.h"
 
@@ -10,6 +12,9 @@ void *writer_thread_entry(void *void_config) {
 	CBuffer *cbuffer = &config->cbuffer;
 	int size;
 	LINFO("started");
+
+	// SIGHUP to be handled in main thread
+	sighelper_sigblock(SIGHUP);
 
 	while (config->enabled) {
 		size = cbuffer_get_chunk(cbuffer);

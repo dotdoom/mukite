@@ -1,8 +1,10 @@
 #include <pthread.h>
+#include <signal.h>
 
 #include "xmlfsm.h"
 #include "network.h"
 #include "queue.h"
+#include "sighelper.h"
 
 #include "reader.h"
 
@@ -75,6 +77,9 @@ void *reader_thread_entry(void *void_config) {
 	char *current_stanza = 0, *continuous_block = 0;
 
 	LINFO("started");
+
+	// SIGHUP to be handled in main thread
+	sighelper_sigblock(SIGHUP);
 
 	network_buffer.data = malloc(network_buffer_size = queue->network_buffer_size);
 	network_buffer.end = network_buffer.data + network_buffer_size;

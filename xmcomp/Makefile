@@ -11,7 +11,7 @@ UNAME=$(shell uname)
 
 EXECUTABLE=xmcomp
 
-SOURCES=$(EXECUTABLE).c writer.c reader.c logger.c network.c xmlfsm.c queue.c cbuffer.c config.c xcwrapper.c
+SOURCES=$(EXECUTABLE).c writer.c reader.c logger.c network.c xmlfsm.c queue.c cbuffer.c config.c xcwrapper.c sighelper.c
 OBJECTS=$(SOURCES:.c=.o) sha1/sha1.o
 ifeq ($(UNAME),Linux)
 	LIBS=-ldl -lrt

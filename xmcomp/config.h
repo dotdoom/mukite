@@ -1,10 +1,11 @@
 #ifndef XMCOMP_CONFIG_H
 #define XMCOMP_CONFIG_H
 
+#include <stdio.h>
+
 #include "reader.h"
 #include "writer.h"
 
-#include <stdio.h>
 #define CONFIG_OPTION_LENGTH 1024
 
 typedef struct {
@@ -22,6 +23,7 @@ typedef struct {
 		int buffer;
 		int queue;
 		int max_stanza_size;
+		char recovery_mode;
 	} reader;
 	struct {
 		int buffer;
@@ -37,22 +39,30 @@ typedef struct {
 	struct {
 		int level;
 	} logger;
+
+	int last_change_type;
+
+	WriterConfig writer_thread;
+	ReaderConfig reader_thread;
 } XmcompConfig;
 
-// Actions to take, depending on config changes:
-#define CONFIG_CHANGE_NONE 0
+#define UCC_ACTION (1 << 8)
+
+// User-Config-Change-Actions to take:
+#define UCCA_NONE (UCC_ACTION * 0)
 // There are changes which can be applied immediately, w/o any restarts
-#define CONFIG_CHANGE_NO_RESTART 1
+#define UCCA_NO_RESTART (UCC_ACTION * 1)
 // There are changes that require component library reloading (typically filename change)
-#define CONFIG_CHANGE_RELOAD_LIBRARY 2
+#define UCCA_RELOAD_LIBRARY (UCC_ACTION * 2)
 // There are changes that component library may be interested in, and handle as appropriate (typically parser config)
-#define CONFIG_CHANGE_NOTIFY_LIBRARY 4
+#define UCCA_NOTIFY_LIBRARY (UCC_ACTION * 4)
 // There are changes that require wrapper process restart (reader hard changes)
-#define CONFIG_CHANGE_RESTART_READER 8
+#define UCCA_RESTART_READER (UCC_ACTION * 8)
 // There are changes that require writer restart
-#define CONFIG_CHANGE_RESTART_WRITER 16
+#define UCCA_RESTART_WRITER (UCC_ACTION * 16)
 // There are changes requiring connection reset (reauth or host/port change)
-#define CONFIG_CHANGE_RECONNECT 32
-int config_read(FILE *, XmcompConfig *, char allow_hostname_change);
+#define UCCA_RECONNECT (UCC_ACTION * 32)
+
+void config_read(FILE *, XmcompConfig *);
 
 #endif

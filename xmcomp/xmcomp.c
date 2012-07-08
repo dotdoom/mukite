@@ -12,14 +12,24 @@
 #include "network.h"
 #include "writer.h"
 #include "xcwrapper.h"
+#include "sighelper.h"
 
 XmcompConfig *config = 0;
 pid_t wrapper = 0;
 
-void reload_config(int signal) {
-	config_read(stdin, config, !signal);
+static void reload_config(int signal) {
+	config_read(stdin, config);
+
 	log_level = config->logger.level;
-	if (wrapper > 0 && wrapper != (pid_t)-1) {
+
+	if ((config->last_change_type & UCCA_RECONNECT) == UCCA_RECONNECT) {
+		LWARN("some configuration changes will only be applied after connection restart");
+	}
+	if ((config->last_change_type & UCCA_RESTART_WRITER) == UCCA_RESTART_WRITER) {
+		LWARN("some configuration changes will only be applied after master restart");
+	}
+
+	if (wrapper) {
 		kill(wrapper, SIGHUP);
 	}
 }
@@ -49,29 +59,16 @@ int main(int argc, char **argv) {
 	char master_exec_name[CONFIG_OPTION_LENGTH] = "xc-master ";
 	char wrapper_exec_name[CONFIG_OPTION_LENGTH] = "xc-wrapper ";
 
-	// SIGHUP handler
-	struct sigaction sighup_action;
-
 	// Writer's config
 	pthread_t writer;
-	WriterConfig *writer_config = 0;
-	// This sigset excludes SIGHUP so that actual signal comes into main thread only
-	sigset_t writer_sigset;
 
 	// Wrapper process exit status
 	int wrapper_stat_loc;
+	pid_t wrapper_wait_res;
 
 	LINFO("xmcomp %d starting", VERSION);
 
-	// Static Initialization
-	sigemptyset(&writer_sigset);
-	sigaddset(&writer_sigset, SIGHUP);
-
-	// Install SIGHUP (reload config) handler
-	memset(&sighup_action, 0, sizeof(sighup_action));
-	sighup_action.sa_handler = reload_config;
-	sigemptyset(&sighup_action.sa_mask);
-	sigaction(SIGHUP, &sighup_action, 0);
+	sighelper_sigaction(SIGHUP, reload_config);
 
 	config = malloc(sizeof(*config));
 	memset(config, 0, sizeof(config));
@@ -91,34 +88,30 @@ int main(int argc, char **argv) {
 
 	shm = shm_alloc(config->component.hostname,
 			sizeof(*config) +
-			sizeof(*writer_config) +
 			config->writer.buffer);
 	memcpy(shm, config, sizeof(*config));
 	free(config);
 	config = (XmcompConfig *)shm;
 	shm += sizeof(*config);
 
-	writer_config = (WriterConfig *)(shm);
-	shm += sizeof(*writer_config);
-
-	cbuffer_init(&writer_config->cbuffer, shm, config->writer.buffer);
+	cbuffer_init(&config->writer_thread.cbuffer, shm, config->writer.buffer);
 
 	while (1) {
 		LINFO("connecting to %s:%d", config->network.host, config->network.port);
 
-		writer_config->socket = net_connect(config->network.host, config->network.port);
-		if (writer_config->socket >= 0) {
+		config->writer_thread.socket = net_connect(config->network.host, config->network.port);
+		if (config->writer_thread.socket >= 0) {
 			LINFO("opening XMPP stream to %s", config->component.hostname);
-			if (net_stream(writer_config->socket,
+			if (net_stream(config->writer_thread.socket,
 						"xmcomp",
 						config->component.hostname,
 						config->component.password)) {
-				net_disconnect(writer_config->socket);
-				writer_config->socket = -1;
+				net_disconnect(config->writer_thread.socket);
+				config->writer_thread.socket = -1;
 			}
 		}
 
-		if (writer_config->socket < 0) {
+		if (config->writer_thread.socket < 0) {
 			LERROR("retrying in %d second(s)", reconnect_delay);
 			sleep(reconnect_delay);
 			if (reconnect_delay < 60) {
@@ -129,12 +122,12 @@ int main(int argc, char **argv) {
 
 		reconnect_delay = 1;
 
-		writer_config->enabled = 1;
+		config->writer_thread.enabled = 1;
 		LINFO("creating writer thread");
-		pthread_create(&writer, 0, writer_thread_entry, (void *)writer_config);
-		pthread_sigmask(SIG_BLOCK, &writer_sigset, 0);
+		pthread_create(&writer, 0, writer_thread_entry, (void *)&config->writer_thread);
 
-		while (writer_config->enabled) {
+		config->reader.recovery_mode = 0;
+		while (config->writer_thread.enabled) {
 			sleep(1);
 			wrapper = fork();
 			if (wrapper == -1) {
@@ -142,37 +135,47 @@ int main(int argc, char **argv) {
 			} else if (!wrapper) {
 				// Child process
 				strcpy(argv[0], wrapper_exec_name);
-				return wrapper_main(config, writer_config);
+				return wrapper_main(config);
 			}
 			LINFO("waiting for subprocess, PID %d", wrapper);
-			while (wrapper != (pid_t)-1) {
-				wrapper = wait(&wrapper_stat_loc);
-				if (wrapper != -1) {
-					if (wrapper != (pid_t)-1) {
-						if (WIFEXITED(wrapper_stat_loc)) {
-							LINFO("PID %d exited with code %d",
-									wrapper, WEXITSTATUS(wrapper_stat_loc));
-						} else if (WIFSIGNALED(wrapper_stat_loc)) {
-							LWARN("PID %d killed by signal %d",
-									wrapper, WTERMSIG(wrapper_stat_loc));
-						} else if (WIFSTOPPED(wrapper_stat_loc)) {
-							LWARN("PID %d stopped by signal %d; waiting",
-									wrapper, WSTOPSIG(wrapper_stat_loc));
-						} else if (WIFCONTINUED(wrapper_stat_loc)) {
-							LWARN("PID %d continued; waiting", wrapper);
-						}
+			while (wrapper) {
+				wrapper_wait_res = wait(&wrapper_stat_loc);
+				if (wrapper_wait_res == -1 || wrapper_wait_res == (pid_t)-1) {
+					if (errno == EINTR) {
+						LDEBUG("wait() interrupted by signal, resuming");
+					} else {
+						LERRNO("wrapper process exited magically or too fast, wait() says", errno);
+						wrapper = 0;
+					}
+				} else {
+					if (WIFEXITED(wrapper_stat_loc)) {
+						LINFO("PID %d exited with code %d",
+								wrapper, WEXITSTATUS(wrapper_stat_loc));
+						wrapper = 0;
+					} else if (WIFSIGNALED(wrapper_stat_loc)) {
+						LWARN("PID %d killed by signal %d",
+								wrapper, WTERMSIG(wrapper_stat_loc));
+						wrapper = 0;
+					} else if (WIFSTOPPED(wrapper_stat_loc)) {
+						LWARN("PID %d stopped by signal %d; waiting",
+								wrapper, WSTOPSIG(wrapper_stat_loc));
+					} else if (WIFCONTINUED(wrapper_stat_loc)) {
+						LWARN("PID %d continued; waiting", wrapper);
 					}
 				}
 			}
+
+			// When wrapper dies we always switch to Recovery Mode
+			config->reader.recovery_mode = 1;
 		}
 
 		LINFO("joining writer thread");
 		pthread_join(writer, 0);
 
 		LINFO("clearing writer buffer and disconnecting");
-		cbuffer_clear(&writer_config->cbuffer);
-		net_unstream(writer_config->socket);
-		net_disconnect(writer_config->socket);
+		cbuffer_clear(&config->writer_thread.cbuffer);
+		net_unstream(config->writer_thread.socket);
+		net_disconnect(config->writer_thread.socket);
 	}
 
 	return 0;

@@ -6,7 +6,7 @@
 typedef struct {
 	char enabled;
 	int socket;
-	char recovery;
+	char recovery_mode;
 	int recovery_stanza_size;
 	StanzaQueue queue;
 } ReaderConfig;

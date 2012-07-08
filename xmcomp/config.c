@@ -4,34 +4,36 @@
 
 #include "config.h"
 
-#define READ_CONFIG_STR(name, level) \
+#define READ_CONFIG_STR(name, type) \
 	if (!strcmp(cfg_opt_name, #name)) { \
 		fscanf(file, "%1023s", cfg_opt_str); \
-		if ((cfg_change_type & CONFIG_CHANGE_ ## level) != CONFIG_CHANGE_ ## level) { \
+		if ((config->last_change_type & type) != type) { \
 			if (strcmp(cfg_opt_str, config->name)) { \
-				cfg_change_type = CONFIG_CHANGE_ ## level; \
+				config->last_change_type = type; \
 			} \
 		} \
 		strcpy(config->name, cfg_opt_str); \
 	} else
 
-#define READ_CONFIG_INT(name, level) \
+#define READ_CONFIG_INT(name, type) \
 	if (!strcmp(cfg_opt_name, #name)) { \
 		fscanf(file, "%d", &cfg_opt_int); \
-		if ((cfg_change_type & CONFIG_CHANGE_ ## level) != CONFIG_CHANGE_ ## level) { \
+		if ((config->last_change_type & type) != type) { \
 			if (cfg_opt_int != config->name) { \
-				cfg_change_type |= CONFIG_CHANGE_ ## level; \
+				config->last_change_type |= type; \
 			} \
 		} \
 		config->name = cfg_opt_int; \
 	} else
 
-int config_read(FILE *file, XmcompConfig *config, char allow_hostname_change) {
+void config_read(FILE *file, XmcompConfig *config) {
 	char cfg_opt_name[CONFIG_OPTION_LENGTH],
 		 cfg_opt_str[CONFIG_OPTION_LENGTH];
-	int cfg_opt_int, cfg_change_type = CONFIG_CHANGE_NONE;
+	int cfg_opt_int;
 
+	LINFO("loading configuration");
 	rewind(file);
+	config->last_change_type = UCCA_NONE;
 	while (fscanf(file, "%1023s", cfg_opt_name) == 1) {
 		if (cfg_opt_name[0] == '#') {
 			// Skip comments
@@ -39,32 +41,35 @@ int config_read(FILE *file, XmcompConfig *config, char allow_hostname_change) {
 			continue;
 		}
 
-		READ_CONFIG_STR(network.host, RECONNECT)
-		READ_CONFIG_INT(network.port, RECONNECT)
+		READ_CONFIG_STR(network.host, UCCA_RECONNECT)
+		READ_CONFIG_INT(network.port, UCCA_RECONNECT)
 
-		READ_CONFIG_STR(component.password, RECONNECT)
-		// XXX(artem): we should find a better way for hostname handling
-		if (allow_hostname_change && !strcmp(cfg_opt_name, "component.hostname")) {
-			READ_CONFIG_STR(component.hostname, RECONNECT);
+		READ_CONFIG_STR(component.password, UCCA_RECONNECT)
+		// XXX(artem): another way to ignore new hostname
+		if (!strcmp(cfg_opt_name, "component.hostname")) {
+			if (config->component.hostname[0]) {
+				// hostname already set, skip new value
+				fscanf(file, "%*s");
+			} else {
+				READ_CONFIG_STR(component.hostname, UCCA_RECONNECT);
+			}
 		} else
 
-		READ_CONFIG_INT(reader.buffer, NO_RESTART)
-		READ_CONFIG_INT(reader.block, NO_RESTART)
-		READ_CONFIG_INT(reader.queue, RESTART_READER)
-		READ_CONFIG_INT(reader.max_stanza_size, NO_RESTART)
+		READ_CONFIG_INT(reader.buffer, UCCA_NO_RESTART)
+		READ_CONFIG_INT(reader.block, UCCA_NO_RESTART)
+		READ_CONFIG_INT(reader.queue, UCCA_RESTART_READER)
+		READ_CONFIG_INT(reader.max_stanza_size, UCCA_NO_RESTART)
 
-		READ_CONFIG_INT(writer.buffer, RESTART_WRITER)
+		READ_CONFIG_INT(writer.buffer, UCCA_RESTART_WRITER)
 
-		READ_CONFIG_STR(parser.library, RELOAD_LIBRARY)
-		READ_CONFIG_STR(parser.data_file, NOTIFY_LIBRARY)
-		READ_CONFIG_STR(parser.config_file, NOTIFY_LIBRARY)
-		READ_CONFIG_INT(parser.threads, NOTIFY_LIBRARY)
-		READ_CONFIG_INT(parser.buffer, NOTIFY_LIBRARY)
+		READ_CONFIG_STR(parser.library, UCCA_RELOAD_LIBRARY)
+		READ_CONFIG_STR(parser.data_file, UCCA_NOTIFY_LIBRARY)
+		READ_CONFIG_STR(parser.config_file, UCCA_NOTIFY_LIBRARY)
+		READ_CONFIG_INT(parser.threads, UCCA_NOTIFY_LIBRARY)
+		READ_CONFIG_INT(parser.buffer, UCCA_NOTIFY_LIBRARY)
 
-		READ_CONFIG_INT(logger.level, NOTIFY_LIBRARY)
+		READ_CONFIG_INT(logger.level, UCCA_NOTIFY_LIBRARY)
 
-		LWARN("unknown option %s", cfg_opt_name);
+		LWARN("unknown config option '%s'", cfg_opt_name);
 	}
-
-	return cfg_change_type;
 }
