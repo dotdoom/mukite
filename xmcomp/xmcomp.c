@@ -18,7 +18,7 @@ XmcompConfig *config = 0;
 pid_t wrapper = 0;
 
 static void reload_config(int signal) {
-	config_read(stdin, config);
+	config_read(config);
 
 	log_level = config->logger.level;
 
@@ -72,6 +72,9 @@ int main(int argc, char **argv) {
 
 	config = malloc(sizeof(*config));
 	memset(config, 0, sizeof(config));
+	if (argc == 2) {
+		strncpy(config->filename, argv[1], CONFIG_OPTION_LENGTH);
+	}
 	// Some defaults
 	config->reader.max_stanza_size = 65536;
 	config->reader.block = 0;

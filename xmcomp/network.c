@@ -72,7 +72,7 @@ int net_send(Socket *sock, char *data, int size) {
 
 	if (bytes_sent < 0) {
 		error = errno;
-		LERRNO("failed to send buffer of size %d via %d", size, sock->socket, error);
+		LERRNO("failed to send buffer of size %d via %d", error, size, sock->socket);
 		return -1;
 	}
 
@@ -89,7 +89,7 @@ BOOL net_send_all(Socket *sock, char *data, int size) {
 		bytes_sent = send(sock->socket, data, size, 0);
 		if (bytes_sent < 0) {
 			error = errno;
-			LERRNO("failed to send %d bytes via %d", size, sock->socket, error);
+			LERRNO("failed to send %d bytes via %d", error, size, sock->socket);
 			return FALSE;
 		}
 
@@ -248,7 +248,7 @@ readable_timeout(int sock, int timeout)
 
 	if ((bytes_received = recv(sock->socket, buffer, size, 0)) < 0) {
 		error = errno;
-		LERRNO("failed to receive %d bytes from socket %d", size, sock->socket, error);
+		LERRNO("failed to receive %d bytes from socket %d", error, size, sock->socket);
 		return -1;
 	}
 

@@ -26,18 +26,32 @@
 		config->name = cfg_opt_int; \
 	} else
 
-void config_read(FILE *file, XmcompConfig *config) {
+BOOL config_read(XmcompConfig *config) {
 	char cfg_opt_name[CONFIG_OPTION_LENGTH],
 		 cfg_opt_str[CONFIG_OPTION_LENGTH];
-	int cfg_opt_int;
+	int cfg_opt_int, error;
+	FILE *file = 0;
 
-	LINFO("loading configuration");
-	rewind(file);
 	config->last_change_type = UCCA_NONE;
+
+	LINFO("loading configuration from '%s'", config->filename[0] ? config->filename : "stdin");
+	if (config->filename[0]) {
+		file = fopen(config->filename, "r");
+		if (!file) {
+			error = errno;
+			LERRNO("could not open configuration file %s for reading",
+					error, config->filename);
+			return FALSE;
+		}
+	} else {
+		file = stdin;
+	}
+
+	rewind(file);
 	while (fscanf(file, "%1023s", cfg_opt_name) == 1) {
 		if (cfg_opt_name[0] == '#') {
 			// Skip comments
-			scanf("%*[^\n]\n");
+			fscanf(file, "%*[^\n]\n");
 			continue;
 		}
 
@@ -68,8 +82,13 @@ void config_read(FILE *file, XmcompConfig *config) {
 		READ_CONFIG_INT(parser.threads, UCCA_NOTIFY_LIBRARY)
 		READ_CONFIG_INT(parser.buffer, UCCA_NOTIFY_LIBRARY)
 
-		READ_CONFIG_INT(logger.level, UCCA_NOTIFY_LIBRARY)
+		READ_CONFIG_INT(logger.level, UCCA_NO_RESTART)
 
 		LWARN("unknown config option '%s'", cfg_opt_name);
 	}
+
+	if (file != stdin) {
+		fclose(file);
+	}
+	return TRUE;
 }

@@ -40,6 +40,7 @@ typedef struct {
 		int level;
 	} logger;
 
+	char filename[CONFIG_OPTION_LENGTH];
 	int last_change_type;
 
 	WriterConfig writer_thread;
@@ -63,6 +64,6 @@ typedef struct {
 // There are changes requiring connection reset (reauth or host/port change)
 #define UCCA_RECONNECT (UCC_ACTION * 32)
 
-void config_read(FILE *, XmcompConfig *);
+BOOL config_read(XmcompConfig *);
 
 #endif
