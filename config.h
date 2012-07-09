@@ -1,18 +1,20 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-typedef struct {
-	StanzaQueue recv_queue;
-	CBuffer send_cbuffer;
+#include "xmcomp/config.h"
 
-	int parsers_limit, parsers_count, parser_output_buffer_size;
-	pthread_t *parsers;
+#include "rooms.h"
+#include "parser.h"
+
+#define PARSERS_COUNT_LIMIT 1024
+
+typedef struct {
+	XmcompConfig *xc_config;
 
 	Rooms rooms;
 
-	Buffer hostname;
-
-	char reserved[1024];
-} RuntimeConfig;
+	int parsers_count;
+	ParserConfig parsers[PARSERS_COUNT_LIMIT];
+} MukiteConfig;
 
 #endif

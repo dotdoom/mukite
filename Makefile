@@ -12,7 +12,7 @@ UNAME=$(shell uname)
 LIBRARY=libmukite
 WRAPPER=xmcomp/xmcomp
 
-SOURCES=$(LIBRARY).c xmcomp/queue.c xmcomp/cbuffer.c parser.c router.c builder.c jid.c acl.c config.c
+SOURCES=$(LIBRARY).c xmcomp/xmlfsm.c xmcomp/queue.c xmcomp/cbuffer.c xmcomp/sighelper.c parser.c router.c builder.c jid.c acl.c config.c rooms.c room.c
 OBJECTS=$(SOURCES:.c=.o)
 
 all: $(LIBRARY).so $(WRAPPER)

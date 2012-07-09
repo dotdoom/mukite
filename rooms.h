@@ -13,13 +13,13 @@ typedef struct {
 	pthread_mutex_t sync;
 } Rooms;
 
-void rooms_init(Rooms *rooms);
-void rooms_deinit(Rooms *rooms);
+void rooms_init(Rooms *);
+void rooms_deinit(Rooms *);
 
-Room *rooms_acquire(Rooms *rooms, Jid *jid);
-void rooms_release(Room *room);
+Room *rooms_acquire(Rooms *, Jid *);
+void rooms_release(Room *);
 
-void rooms_serialize(Rooms *rooms, FILE *output);
-int rooms_deserialize(Rooms *rooms, FILE *input);
+void rooms_serialize(Rooms *, FILE *);
+int rooms_deserialize(Rooms *, FILE *);
 
 #endif

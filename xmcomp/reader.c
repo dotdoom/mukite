@@ -100,7 +100,7 @@ void *reader_thread_entry(void *void_config) {
 			LINFO("network buffer has been reallocated to %d bytes", network_buffer_size);
 		}
 
-		/*if (config->recovery) {
+		/*if (config->recovery_mode) {
 			xmlfsm_recover(&network_buffer, &network_data);
 		}*/
 

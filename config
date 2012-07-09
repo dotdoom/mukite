@@ -59,4 +59,4 @@ writer.buffer 1048576
 # 1 - info
 # 2 - warning
 # 3 - error
-logger.level 1
+logger.level 0

@@ -45,9 +45,9 @@ BOOL config_read(XmcompConfig *config) {
 		}
 	} else {
 		file = stdin;
+		rewind(file);
 	}
 
-	rewind(file);
 	while (fscanf(file, "%1023s", cfg_opt_name) == 1) {
 		if (cfg_opt_name[0] == '#') {
 			// Skip comments

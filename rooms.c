@@ -24,6 +24,7 @@ Room *rooms_acquire(Rooms *rooms, Jid *jid) {
 		LDEBUG("creating new room '%.*s'", JID_LEN(jid), JID_STR(jid));
 		room = malloc(sizeof(*room));
 		room_init(room, &jid->node);
+
 		if (rooms->end) {
 			rooms->end->next = room;
 			room->prev = rooms->end;

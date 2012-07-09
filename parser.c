@@ -1,23 +1,27 @@
 #include <pthread.h>
 #include <string.h>
-
+#include "xmcomp/cbuffer.h"
 #include "xmcomp/common.h"
+#include "xmcomp/logger.h"
 #include "xmcomp/xmlfsm.h"
+#include "xmcomp/config.h"
+#include "xmcomp/sighelper.h"
+
 #include "router.h"
 #include "room.h"
 #include "rooms.h"
 #include "router.h"
 #include "builder.h"
-#include "xmcomp/cbuffer.h"
+#include "config.h"
 
 #include "parser.h"
 
-inline int set_type(BufferPtr *value, IncomingPacket *packet) {
+inline BOOL set_type(BufferPtr *value, IncomingPacket *packet) {
 	int value_size = BPT_SIZE(value);
 	if (BPT_EQ_LIT("error", value)) {
 		// TODO(artem): route errors, drop participant from the room in some cases
 		LDEBUG("not handling yet: stanza type error");
-		return -1;
+		return FALSE;
 	}
 
 	switch (packet->name) {
@@ -27,14 +31,14 @@ inline int set_type(BufferPtr *value, IncomingPacket *packet) {
 					 !BPT_EQ_LIT("groupchat", value))) {
 				LDEBUG("dropping: unknown message type '%.*s'",
 						value_size, value->data);
-				return -1;
+				return FALSE;
 			}
 			break;
 		case 'p':
 			if (value_size && !BPT_EQ_LIT("unavailable", value)) {
 				LDEBUG("dropping: unknown presence type '%.*s'",
 						value_size, value->data);
-				return -1;
+				return FALSE;
 			}
 			break;
 		case 'i':
@@ -44,16 +48,16 @@ inline int set_type(BufferPtr *value, IncomingPacket *packet) {
 					 !BPT_EQ_LIT("result", value))) {
 				LDEBUG("dropping: unknown iq type '%.*s'",
 						value_size, value->data);
-				return -1;
+				return FALSE;
 			}
 			break;
 	}
 
 	packet->type = value_size ? *value->data : 0;
-	return 0;
+	return TRUE;
 }
 
-int parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
+BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 	XmlAttr attr;
 	Buffer stanza_name;
 	char erase;
@@ -65,7 +69,7 @@ int parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 	// Parse stanza name
 	if (xmlfsm_node_name(buffer, &stanza_name) == XMLPARSE_FAULT) {
 		LWARN("dropping: stanza name parsing failure");
-		return -1;
+		return FALSE;
 	}
 	LDEBUG("got stanza name '%.*s'", stanza_name.size, stanza_name.data);
 	if (
@@ -73,7 +77,7 @@ int parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 			!B_EQ_LIT("presence", &stanza_name) &&
 			!B_EQ_LIT("iq", &stanza_name)) {
 		LWARN("dropping: unknown stanza name '%.*s'", stanza_name.size, stanza_name.data);
-		return -1;
+		return FALSE;
 	}
 	packet->name = *stanza_name.data;
 	packet->header.end = buffer->data;
@@ -89,17 +93,17 @@ int parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 			if (jid_struct(&attr.value, &packet->real_from)) {
 				LWARN("'from' jid malformed: '%.*s'",
 						BPT_SIZE(&attr.value), attr.value.data);
-				return -1;
+				return FALSE;
 			}
 		} else if (BPT_EQ_LIT("to", &attr.name)) {
 			if (jid_struct(&attr.value, &packet->proxy_to)) {
 				LWARN("'to' jid malformed: '%.*s'",
 						BPT_SIZE(&attr.value), attr.value.data);
-				return -1;
+				return FALSE;
 			}
 		} else if (BPT_EQ_LIT("type", &attr.name)) {
-			if (set_type(&attr.value, packet)) {
-				return -1;
+			if (!set_type(&attr.value, packet)) {
+				return FALSE;
 			}
 			//erase = packet->name == 'i';
 		} else {
@@ -114,17 +118,17 @@ int parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 	}
 	if (retval == XMLPARSE_FAULT) {
 		LWARN("dropping: attr parsing failure");
-		return -1;
+		return FALSE;
 	}
 	if (JID_EMPTY(&packet->real_from) || JID_EMPTY(&packet->proxy_to)) {
 		LWARN("dropping: not routable");
-		return -1;
+		return FALSE;
 	}
 	if (packet->name == 'm' &&
 			((packet->proxy_to.resource.data == 0) == (packet->type == 'c'))) {
 		// The nickname (resource) is specified and type is not c(hat) - thus g(roupchat)
 		LDEBUG("dropping: wrong message type");
-		return -1;
+		return FALSE;
 	}
 
 	// Set inner data
@@ -136,7 +140,7 @@ int parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 		packet->inner.end = buffer->end - stanza_name.size - 3;
 	}
 
-	return 0;
+	return TRUE;
 }
 
 typedef struct {
@@ -158,43 +162,50 @@ int send_packet(void *void_local_buffer_storage, BuilderPacket *packet) {
 	return retval;
 }
 
-void *parser_thread_entry(void *void_runtime_config) {
-	RuntimeConfig *runtime_config = (RuntimeConfig *)void_runtime_config;
-	StanzaQueue *queue = &runtime_config->recv_queue;
-	Rooms *rooms = &runtime_config->rooms;
+void *parser_thread_entry(void *void_parser_config) {
+	ParserConfig *parser_config = (ParserConfig *)void_parser_config;
+	MukiteConfig *config = (MukiteConfig *)parser_config->global_config;
+	Rooms *rooms = &config->rooms;
+	XmcompConfig *xc_config = config->xc_config;
+	StanzaQueue *queue = &xc_config->reader_thread.queue;
+	int allocated_buffer_size = xc_config->parser.buffer;
+
 	StanzaEntry *stanza_entry;
 	IncomingPacket incoming_packet;
 	BufferPtr stanza_entry_buffer;
-	int allocated_buffer_size = runtime_config->parser_output_buffer_size;
 	LocalBufferStorage lbs;
 	SendCallback send_callback;
 	int receivers;
 
 	lbs.buffer.data = malloc(allocated_buffer_size);
 	lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
-	lbs.cbuffer = &runtime_config->send_cbuffer;
+	lbs.cbuffer = &config->xc_config->writer_thread.cbuffer;
 
 	send_callback.proc = send_packet;
 	send_callback.data = &lbs;
 
 	LINFO("started");
-	while (runtime_config->flags & RCF_PARSER) {
-		if (allocated_buffer_size != runtime_config->parser_output_buffer_size) {
+	sighelper_sigblockall();
+
+	while (parser_config->enabled) {
+		if (allocated_buffer_size != xc_config->parser.buffer) {
 			lbs.buffer.data = realloc(lbs.buffer.data,
-					allocated_buffer_size = runtime_config->parser_output_buffer_size);
+					allocated_buffer_size = xc_config->parser.buffer);
 			lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
 		}
 
 		stanza_entry = queue_pop_data(queue);
-		stanza_entry_buffer.data = stanza_entry->buffer;
-		stanza_entry_buffer.end = stanza_entry->buffer + stanza_entry->data_size;
+		if (stanza_entry->buffer) {
+			stanza_entry_buffer.data = stanza_entry->buffer;
+			stanza_entry_buffer.end = stanza_entry->buffer + stanza_entry->data_size;
 
-		if (!parse_incoming_packet(&stanza_entry_buffer, &incoming_packet)) {
-			if ((incoming_packet.room = rooms_acquire(rooms, &incoming_packet.proxy_to))) {
-				lbs.buffer.data_end = lbs.buffer.data;
-				receivers = route(&incoming_packet, &send_callback, runtime_config);
-				LDEBUG("forwarded to %d JIDs", receivers);
-				rooms_release(incoming_packet.room);
+			if (parse_incoming_packet(&stanza_entry_buffer, &incoming_packet)) {
+				if ((incoming_packet.room = rooms_acquire(rooms, &incoming_packet.proxy_to))) {
+					lbs.buffer.data_end = lbs.buffer.data;
+					receivers = route(&incoming_packet, &send_callback, xc_config->component.hostname);
+					LDEBUG("forwarded to %d JIDs", receivers);
+					rooms_release(incoming_packet.room);
+				}
 			}
 		}
 

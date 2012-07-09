@@ -5,7 +5,7 @@
 #include "cbuffer.h"
 
 typedef struct {
-	char enabled;
+	BOOL enabled;
 	Socket socket;
 	CBuffer cbuffer;
 } WriterConfig;
