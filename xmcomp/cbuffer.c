@@ -7,8 +7,6 @@
 
 void cbuffer_init(CBuffer *cbuffer, char *buffer, int size) {
 	CBufferSync *sync = &cbuffer->sync;
-	pthread_mutexattr_t mutex_attr;
-	pthread_condattr_t cond_attr;
 
 	cbuffer->start = cbuffer->read_position = cbuffer->write_position = buffer;
 	cbuffer->buffer_size = size;
@@ -16,16 +14,9 @@ void cbuffer_init(CBuffer *cbuffer, char *buffer, int size) {
 	cbuffer->end = cbuffer->start + cbuffer->buffer_size;
 	cbuffer->write_size = cbuffer->buffer_size;
 
-	pthread_mutexattr_init(&mutex_attr);
-	pthread_mutexattr_setpshared(&mutex_attr, PTHREAD_PROCESS_SHARED);
-	pthread_mutex_init(&sync->cbuffer_mutex, &mutex_attr);
-	pthread_mutexattr_destroy(&mutex_attr);
-
-	pthread_condattr_init(&cond_attr);
-	pthread_condattr_setpshared(&cond_attr, PTHREAD_PROCESS_SHARED);
-	pthread_cond_init(&sync->data_available_cv, &cond_attr);
-	pthread_cond_init(&sync->free_available_cv, &cond_attr);
-	pthread_condattr_destroy(&cond_attr);
+	pthread_mutex_init(&sync->cbuffer_mutex, 0);
+	pthread_cond_init(&sync->data_available_cv, 0);
+	pthread_cond_init(&sync->free_available_cv, 0);
 }
 
 void cbuffer_clear(CBuffer *cbuffer) {

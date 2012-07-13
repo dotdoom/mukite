@@ -4,6 +4,7 @@
 #include "network.h"
 #include "cbuffer.h"
 #include "sighelper.h"
+#include "logger.h"
 
 #include "writer.h"
 

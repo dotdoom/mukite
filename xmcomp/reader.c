@@ -1,10 +1,13 @@
 #include <pthread.h>
 #include <signal.h>
+#include <string.h>
+#include <stdlib.h>
 
 #include "xmlfsm.h"
 #include "network.h"
 #include "queue.h"
 #include "sighelper.h"
+#include "logger.h"
 
 #include "reader.h"
 

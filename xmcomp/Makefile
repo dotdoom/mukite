@@ -6,25 +6,19 @@ endif
 CC=gcc
 BARE_CFLAGS=-fPIC -g -Wall
 CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DVERSION=$(REVISION) -DLOG_PTHREAD -DLOG_CTIME
-LDFLAGS=-pthread
 UNAME=$(shell uname)
 
-EXECUTABLE=xmcomp
-
-SOURCES=$(EXECUTABLE).c writer.c reader.c logger.c network.c xmlfsm.c queue.c cbuffer.c config.c xcwrapper.c sighelper.c
+SOURCES=writer.c reader.c logger.c network.c xmlfsm.c queue.c cbuffer.c sighelper.c
 OBJECTS=$(SOURCES:.c=.o) sha1/sha1.o
 ifeq ($(UNAME),Linux)
 	LIBS=-ldl -lrt
 endif
 
-all: $(EXECUTABLE)
-
-$(EXECUTABLE): $(OBJECTS)
-	$(CC) $(LDFLAGS) $(OBJECTS) -o $@ $(LIBS)
+all: $(OBJECTS)
 
 sha1/sha1.o:
 	cd sha1 ; $(MAKE)
 
 clean:
 	cd sha1 ; $(MAKE) clean
-	rm -f $(OBJECTS) $(EXECUTABLE)
+	rm -f $(OBJECTS)

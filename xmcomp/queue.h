@@ -13,7 +13,7 @@ typedef struct StanzaEntry_t {
 
 	int
 		// Number of real data bytes in the buffer
-		data_size, 
+		data_size,
 		// Actual buffer size. Sometimes buffer is preallocated larger for performance reasons
 		buffer_size;
 

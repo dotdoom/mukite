@@ -1,7 +1,7 @@
 #ifndef XMCOMP_COMMON_H
 #define XMCOMP_COMMON_H
 
-#include <stdlib.h>
+/*#include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
 #include <pthread.h>
@@ -9,7 +9,7 @@
 #include <errno.h>
 #include <unistd.h>
 
-#include "logger.h"
+#include "logger.h"*/
 
 #ifndef VERSION
 #define VERSION -1

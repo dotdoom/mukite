@@ -2,8 +2,12 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <errno.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "sha1/sha1.h"
+#include "logger.h"
 
 #include "network.h"
 
