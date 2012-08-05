@@ -19,6 +19,7 @@ XMCOMP_OBJECTS=xmcomp/logger.o \
 	xmcomp/network.o \
 	xmcomp/writer.o \
 	xmcomp/reader.o \
+	xmcomp/buffer.o \
 	xmcomp/sha1/sha1.o
 
 SOURCES=$(EXECUTABLE).c \

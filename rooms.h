@@ -19,7 +19,7 @@ void rooms_destroy(Rooms *);
 Room *rooms_acquire(Rooms *, Jid *);
 void rooms_release(Room *);
 
-void rooms_serialize(Rooms *, FILE *);
-int rooms_deserialize(Rooms *, FILE *);
+BOOL rooms_serialize(Rooms *, FILE *);
+BOOL rooms_deserialize(Rooms *, FILE *, int);
 
 #endif

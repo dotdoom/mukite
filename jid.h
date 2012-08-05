@@ -1,13 +1,14 @@
 #ifndef JID_H
 #define JID_H
 
-#include "xmcomp/common.h"
+#include "xmcomp/buffer.h"
 
 typedef struct {
 	BufferPtr node, host, resource;
 } Jid;
 
 #define JID_PART_LIMIT 1023
+#define JID_LIMIT (JID_PART_LIMIT * 3 + 2)
 
 #define JID_NODE 1
 #define JID_HOST 2
@@ -21,6 +22,9 @@ int jid_cmp(Jid *jid1, Jid *jid2, int mode);
 int jid_strcmp(Jid *jid, Buffer *str, int part);
 void jid_cpy(Jid *dst, Jid *src);
 void jid_free(Jid *jid);
+
+BOOL jid_serialize(Jid *, FILE *);
+BOOL jid_deserialize(Jid *, FILE *);
 
 #define JID_STR(jid) ((jid)->node.data ? (jid)->node.data : (jid)->host.data)
 #define JID_LEN(jid) ((int)((jid)->resource.end - JID_STR(jid)))

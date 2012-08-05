@@ -45,3 +45,11 @@ Room *rooms_acquire(Rooms *rooms, Jid *jid) {
 void rooms_release(Room *room) {
 	pthread_mutex_unlock(&room->sync);
 }
+
+BOOL rooms_serialize(Rooms *rooms, FILE *output) {
+	return TRUE;
+}
+
+BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
+	return TRUE;
+}

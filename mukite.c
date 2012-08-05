@@ -19,6 +19,9 @@ static void reload_config(int signal) {
 }
 
 static void dump_data(int signal) {
+	FILE *output = fopen(config.parser.data_file, "w");
+	rooms_serialize(&config.rooms, output);
+	fclose(output);
 }
 
 static void terminate(int signal) {

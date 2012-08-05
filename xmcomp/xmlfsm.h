@@ -1,7 +1,7 @@
 #ifndef XMCOMP_XMLFSM_H
 #define XMCOMP_XMLFSM_H
 
-#include "common.h"
+#include "buffer.h"
 
 #define XMLPARSE_FAULT -1
 #define XMLPARSE_SUCCESS 0

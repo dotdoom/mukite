@@ -8,7 +8,7 @@ BARE_CFLAGS=-fPIC -g -Wall
 CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DVERSION=$(REVISION) -DLOG_PTHREAD -DLOG_CTIME
 UNAME=$(shell uname)
 
-SOURCES=writer.c reader.c logger.c network.c xmlfsm.c queue.c cbuffer.c sighelper.c
+SOURCES=writer.c reader.c logger.c network.c xmlfsm.c queue.c cbuffer.c sighelper.c buffer.c
 OBJECTS=$(SOURCES:.c=.o)
 
 all: $(OBJECTS) sha1/sha1.o

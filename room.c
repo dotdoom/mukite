@@ -11,7 +11,7 @@ void room_init(Room *room, BufferPtr *node) {
 	room->node.size = BPT_SIZE(node);
 	room->node.data = malloc(room->node.size);
 	memcpy(room->node.data, node->data, room->node.size);
-//	room->flags = MUC_FLAG_SEMIANONYMOUS;
+	room->flags = MUC_FLAGS_DEFAULT;
 
 	room->default_role = ROLE_PARTICIPANT;
 }
@@ -120,4 +120,76 @@ ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid) {
 	}
 
 	return 0;
+}
+
+BOOL participants_serialize(ParticipantEntry *list, FILE *output) {
+	for (; list; list = list->next) {
+		if (!jid_serialize(&list->jid, output) ||
+			!buffer_serialize(&list->nick, output) ||
+			!fwrite(&list->affiliation, sizeof(list->affiliation), 1, output) ||
+			!fwrite(&list->role, sizeof(list->role), 1, output) ||
+			!fwrite(&list->next, sizeof(list->next), 1, output)) {
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
+BOOL participants_deserialize(ParticipantEntry **list, FILE *output, int limit) {
+	return TRUE;
+}
+
+BOOL affiliations_serialize(AffiliationEntry *list, FILE *output) {
+	for (; list; list = list->next) {
+		if (!jid_serialize(&list->jid, output) ||
+			!buffer_serialize(&list->reason, output) ||
+			!fwrite(&list->next, sizeof(list->next), 1, output)) {
+			return FALSE;
+		}
+	}
+	return TRUE;
+}
+
+BOOL affiliations_deserialize(AffiliationEntry **list, FILE *input, int limit) {
+	return TRUE;
+}
+
+BOOL room_serialize(Room *room, FILE *output) {
+	return
+		buffer_serialize(&room->node, output) &&
+		buffer_serialize(&room->title, output) &&
+		buffer_serialize(&room->description, output) &&
+		buffer_serialize(&room->subject, output) &&
+		buffer_serialize(&room->password, output) &&
+
+		fwrite(&room->flags, sizeof(room->flags), 1, output) &&
+		fwrite(&room->default_role, sizeof(room->default_role), 1, output) &&
+		fwrite(&room->max_participants, sizeof(room->max_participants), 1, output) &&
+		fwrite(&room->_unused, sizeof(room->_unused), 1, output) &&
+
+		participants_serialize(room->participants, output) &&
+		affiliations_serialize(room->owners, output) &&
+		affiliations_serialize(room->admins, output) &&
+		affiliations_serialize(room->members, output) &&
+		affiliations_serialize(room->outcasts, output);
+}
+
+BOOL room_deserialize(Room *room, FILE *input) {
+	return
+		buffer_deserialize(&room->node, input, JID_PART_LIMIT) &&
+		buffer_deserialize(&room->title, input, USER_STRING_OPTION_LIMIT) &&
+		buffer_deserialize(&room->description, input, USER_STRING_OPTION_LIMIT) &&
+		buffer_deserialize(&room->subject, input, USER_STRING_OPTION_LIMIT) &&
+		buffer_deserialize(&room->password, input, USER_STRING_OPTION_LIMIT) &&
+
+		fread(&room->flags, sizeof(room->flags), 1, input) &&
+		fread(&room->default_role, sizeof(room->default_role), 1, input) &&
+		fread(&room->max_participants, sizeof(room->max_participants), 1, input) &&
+		fread(&room->_unused, sizeof(room->_unused), 1, input) &&
+
+		participants_deserialize(&room->participants, input, PARTICIPANTS_LIMIT) &&
+		affiliations_deserialize(&room->owners, input, AFFILIATION_LIST_LIMIT) &&
+		affiliations_deserialize(&room->admins, input, AFFILIATION_LIST_LIMIT) &&
+		affiliations_deserialize(&room->members, input, AFFILIATION_LIST_LIMIT) &&
+		affiliations_deserialize(&room->outcasts, input, AFFILIATION_LIST_LIMIT);
 }

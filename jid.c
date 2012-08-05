@@ -175,3 +175,18 @@ void jid_cpy(Jid *dst, Jid *src) {
 void jid_free(Jid *jid) {
 	free(JID_STR(jid));
 }
+
+BOOL jid_serialize(Jid *jid, FILE *output) {
+	BufferPtr jid_buffer_ptr;
+	jid_buffer_ptr.data = JID_STR(jid);
+	jid_buffer_ptr.end = jid_buffer_ptr.data + JID_LEN(jid);
+	return buffer_ptr_serialize(&jid_buffer_ptr, output);
+}
+
+BOOL jid_deserialize(Jid *jid, FILE *input) {
+	BufferPtr jid_buffer_ptr;
+	if (!buffer_ptr_deserialize(&jid_buffer_ptr, input, JID_LIMIT)) {
+		return FALSE;
+	}
+	return jid_struct(&jid_buffer_ptr, jid);
+}
