@@ -94,6 +94,11 @@ void config_apply(Config *config) {
 
 	log_level = config->logger.level;
 
+	config->reader_thread.queue.fixed_block_buffer_size =
+		config->reader.block;
+	config->reader_thread.queue.network_buffer_size =
+		config->reader.buffer;
+
 	if (config->parser.threads > PARSERS_COUNT_LIMIT) {
 		LERROR("%d exceeds parsers limit %d, shrinking",
 				config->parser.threads, PARSERS_COUNT_LIMIT);
