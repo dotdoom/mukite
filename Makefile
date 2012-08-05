@@ -5,29 +5,44 @@ endif
 
 CC=gcc
 BARE_CFLAGS=-fPIC -g -Wall
-CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DVERSION=$(REVISION) -DLOG_PTHREAD -DLOG_CTIME
+CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DVERSION=$(REVISION)
 LDFLAGS=-pthread
 UNAME=$(shell uname)
 
-LIBRARY=libmukite
-WRAPPER=xmcomp/xmcomp
+EXECUTABLE=mukite
 
-SOURCES=$(LIBRARY).c xmcomp/xmlfsm.c xmcomp/queue.c xmcomp/cbuffer.c xmcomp/sighelper.c parser.c router.c builder.c jid.c acl.c config.c rooms.c room.c
+XMCOMP_OBJECTS=xmcomp/logger.o \
+	xmcomp/xmlfsm.o \
+	xmcomp/queue.o \
+	xmcomp/cbuffer.o \
+	xmcomp/sighelper.o \
+	xmcomp/network.o \
+	xmcomp/writer.o \
+	xmcomp/reader.o \
+	xmcomp/sha1/sha1.o
+
+SOURCES=$(EXECUTABLE).c \
+	parser.c \
+	router.c \
+	builder.c \
+	jid.c \
+	acl.c \
+	config.c \
+	rooms.c \
+	room.c
 OBJECTS=$(SOURCES:.c=.o)
 
-all: $(LIBRARY).so $(WRAPPER)
+all: $(EXECUTABLE)
 
-run: $(LIBRARY).so $(WRAPPER)
-	LD_LIBRARY_PATH="." $(WRAPPER) <config
+run: $(EXECUTABLE)
+	$(EXECUTABLE) config
 
-$(LIBRARY).so: $(OBJECTS)
-	$(CC) -shared -Wl,-soname,$@.$(REVISION) -o $@.$(REVISION) $(OBJECTS)
-	ln -sf $@.$(REVISION) $@
+$(EXECUTABLE): $(OBJECTS) $(XMCOMP_OBJECTS)
 
-$(WRAPPER):
+$(XMCOMP_OBJECTS):
 	cd xmcomp ; $(MAKE)
 
 clean:
 	cd xmcomp ; $(MAKE) clean
 	rm -f $(OBJECTS)
-	rm -f $(LIBRARY).so $(LIBRARY).so.*
+	rm -f $(EXECUTABLE)

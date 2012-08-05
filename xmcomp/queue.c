@@ -76,7 +76,7 @@ inline void queue_push_free(StanzaQueue *queue, StanzaEntry *stanza) {
 	pthread_mutex_unlock(&sync->free_queue_mutex);
 }
 
-inline void queue_init(StanzaQueue *queue, int size) {
+void queue_init(StanzaQueue *queue, int size) {
 	StanzaEntry *current = 0;
 	StanzaQueueSync *sync = &queue->sync;
 	int i;
@@ -96,4 +96,27 @@ inline void queue_init(StanzaQueue *queue, int size) {
 	pthread_mutex_init(&sync->free_queue_mutex, 0);
 	pthread_cond_init(&sync->data_available_cv, 0);
 	pthread_cond_init(&sync->free_available_cv, 0);
+}
+
+void queue_destroy_single(StanzaEntry *q) {
+	StanzaEntry *c = q;
+	while ((c = q)) {
+		if (c->buffer) {
+			free(c->buffer);
+		}
+		q = c->next;
+		free(c);
+	}
+}
+
+void queue_destroy(StanzaQueue *queue) {
+	StanzaQueueSync *sync = &queue->sync;
+
+	pthread_mutex_destroy(&sync->data_queue_mutex);
+	pthread_mutex_destroy(&sync->free_queue_mutex);
+	pthread_cond_destroy(&sync->data_available_cv);
+	pthread_cond_destroy(&sync->free_available_cv);
+	
+	queue_destroy_single(queue->data_start_queue);
+	queue_destroy_single(queue->free_queue);
 }

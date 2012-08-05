@@ -17,8 +17,8 @@ void *writer_thread_entry(void *void_config) {
 
 	while (config->enabled) {
 		size = cbuffer_get_chunk(cbuffer);
-		size = net_send(&config->socket, cbuffer->read_position, size);
-		if (size < 0 || !config->socket.connected) {
+		size = net_send(config->socket, cbuffer->read_position, size);
+		if (size < 0 || !config->socket->connected) {
 			LERROR("unrecoverable network error detected, exiting");
 			break;
 		}

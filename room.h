@@ -57,7 +57,7 @@ typedef struct Room_t {
 } Room;
 
 void room_init(Room *room, BufferPtr *node);
-void room_deinit(Room *room);
+void room_destroy(Room *room);
 
 void room_lock(Room *room);
 void room_unlock(Room *room);

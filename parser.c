@@ -1,10 +1,11 @@
-#include <pthread.h>
+#include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+
 #include "xmcomp/cbuffer.h"
 #include "xmcomp/common.h"
 #include "xmcomp/logger.h"
 #include "xmcomp/xmlfsm.h"
-#include "xmcomp/config.h"
 #include "xmcomp/sighelper.h"
 
 #include "router.h"
@@ -164,11 +165,10 @@ int send_packet(void *void_local_buffer_storage, BuilderPacket *packet) {
 
 void *parser_thread_entry(void *void_parser_config) {
 	ParserConfig *parser_config = (ParserConfig *)void_parser_config;
-	MukiteConfig *config = (MukiteConfig *)parser_config->global_config;
+	Config *config = (Config *)parser_config->global_config;
 	Rooms *rooms = &config->rooms;
-	XmcompConfig *xc_config = config->xc_config;
-	StanzaQueue *queue = &xc_config->reader_thread.queue;
-	int allocated_buffer_size = xc_config->parser.buffer;
+	StanzaQueue *queue = &config->reader_thread.queue;
+	int allocated_buffer_size = config->parser.buffer;
 
 	StanzaEntry *stanza_entry;
 	IncomingPacket incoming_packet;
@@ -179,7 +179,7 @@ void *parser_thread_entry(void *void_parser_config) {
 
 	lbs.buffer.data = malloc(allocated_buffer_size);
 	lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
-	lbs.cbuffer = &config->xc_config->writer_thread.cbuffer;
+	lbs.cbuffer = &config->writer_thread.cbuffer;
 
 	send_callback.proc = send_packet;
 	send_callback.data = &lbs;
@@ -188,9 +188,9 @@ void *parser_thread_entry(void *void_parser_config) {
 	sighelper_sigblockall();
 
 	while (parser_config->enabled) {
-		if (allocated_buffer_size != xc_config->parser.buffer) {
+		if (allocated_buffer_size != config->parser.buffer) {
 			lbs.buffer.data = realloc(lbs.buffer.data,
-					allocated_buffer_size = xc_config->parser.buffer);
+					allocated_buffer_size = config->parser.buffer);
 			lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
 		}
 
@@ -202,7 +202,7 @@ void *parser_thread_entry(void *void_parser_config) {
 			if (parse_incoming_packet(&stanza_entry_buffer, &incoming_packet)) {
 				if ((incoming_packet.room = rooms_acquire(rooms, &incoming_packet.proxy_to))) {
 					lbs.buffer.data_end = lbs.buffer.data;
-					receivers = route(&incoming_packet, &send_callback, xc_config->component.hostname);
+					receivers = route(&incoming_packet, &send_callback, config->component.hostname);
 					LDEBUG("forwarded to %d JIDs", receivers);
 					rooms_release(incoming_packet.room);
 				}

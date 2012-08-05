@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "xmcomp/logger.h"
+
 #include "room.h"
 
 void room_init(Room *room, BufferPtr *node) {

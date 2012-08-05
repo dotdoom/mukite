@@ -1,6 +1,6 @@
 #include <string.h>
 
-#include "xmcomp/common.h"
+#include "xmcomp/logger.h"
 #include "room.h"
 
 #include "router.h"

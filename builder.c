@@ -1,3 +1,7 @@
+#include <string.h>
+
+#include "xmcomp/logger.h"
+
 #include "jid.h"
 
 #include "builder.h"

@@ -14,7 +14,7 @@ typedef struct {
 } Rooms;
 
 void rooms_init(Rooms *);
-void rooms_deinit(Rooms *);
+void rooms_destroy(Rooms *);
 
 Room *rooms_acquire(Rooms *, Jid *);
 void rooms_release(Room *);

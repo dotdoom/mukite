@@ -15,12 +15,8 @@ component.hostname conference.localhost
 # A password for <handshake>
 component.password secret
 
-## Parser library options.
-# This option is mandatory. Provide a path to the component library
-parser.library ./libmukite.so
-# The rest is read by library itself and some arguments may be not required
+## Parser options.
 parser.data_file rooms.data
-parser.config_file mukite.cfg
 parser.threads 7
 parser.buffer 1048576
 
@@ -42,11 +38,6 @@ reader.block 0
 # Too small values will affect performance on a high-loaded component and too high values affect memory.
 # Changing this option does not require restart and the value will be grabbed for the next incoming stanza
 reader.buffer 1048576
-# This value is used for RECOVERY MODE only. This should match the setting in your XMPP server. If it is smaller,
-# chances are that recovery occures faster, but risks are that recovery never succeeds (if all stanzas are too large).
-# If this is larger, the recovery can take longer.
-# Changing this option only affects restarted component
-reader.max_stanza_size 65536
 
 ## Writer (executed inside of master) config.
 # A cyclic buffer size for the writer. Should be large enough to keep at least single output stanza.

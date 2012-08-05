@@ -1,5 +1,7 @@
 #include <stdlib.h>
 
+#include "xmcomp/logger.h"
+
 #include "rooms.h"
 
 void rooms_init(Rooms *rooms) {
@@ -21,7 +23,7 @@ Room *rooms_acquire(Rooms *rooms, Jid *jid) {
 	}
 
 	if (!room) {
-		LDEBUG("creating new room '%.*s'", JID_LEN(jid), JID_STR(jid));
+		LINFO("creating new room '%.*s'", JID_LEN(jid), JID_STR(jid));
 		room = malloc(sizeof(*room));
 		room_init(room, &jid->node);
 

@@ -9,7 +9,7 @@
 #	define LOG_THREAD_STR "Thread[%lu] "
 #	define LOG_THREAD_PAR (unsigned long)pthread_self(),
 #else
-#	define LOG_THREAD_STR ""
+#	define LOG_THREAD_STR
 #	define LOG_THREAD_PAR
 #endif
 #define LOG_THREAD_PRE
@@ -21,7 +21,7 @@
 	extern time_t log_timestamp;
 #else
 #	define LOG_TIME_PRE
-#	define LOG_TIME_STR ""
+#	define LOG_TIME_STR
 #	define LOG_TIME_PAR
 #endif
 

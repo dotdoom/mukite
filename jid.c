@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "xmcomp/logger.h"
+
 #include "jid.h"
 
 int jid_struct(BufferPtr *jid_string, Jid *jid_struct) {

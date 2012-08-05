@@ -32,6 +32,7 @@ typedef struct {
 
 void cbuffer_init(CBuffer *, char *, int);
 void cbuffer_clear(CBuffer *);
+void cbuffer_destroy(CBuffer *);
 
 inline void cbuffer_write(CBuffer *, char *, int);
 

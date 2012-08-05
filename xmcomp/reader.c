@@ -103,10 +103,6 @@ void *reader_thread_entry(void *void_config) {
 			LINFO("network buffer has been reallocated to %d bytes", network_buffer_size);
 		}
 
-		/*if (config->recovery_mode) {
-			xmlfsm_recover(&network_buffer, &network_data);
-		}*/
-
 		LDEBUG("trying to parse stanza from the received buffer");
 		current_stanza = network_data.data;
 		while (xmlfsm_skip_node(&network_data, 0, &network_buffer) == XMLPARSE_SUCCESS) {

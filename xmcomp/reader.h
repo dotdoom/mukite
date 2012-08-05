@@ -8,8 +8,6 @@
 typedef struct {
 	BOOL enabled;
 	Socket *socket;
-	BOOL recovery_mode;
-	int recovery_stanza_size;
 	StanzaQueue queue;
 } ReaderConfig;
 

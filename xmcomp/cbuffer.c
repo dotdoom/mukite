@@ -25,6 +25,13 @@ void cbuffer_clear(CBuffer *cbuffer) {
 	cbuffer->write_size = cbuffer->buffer_size;
 }
 
+void cbuffer_destroy(CBuffer *cbuffer) {
+	CBufferSync *sync = &cbuffer->sync;
+	pthread_mutex_destroy(&sync->cbuffer_mutex);
+	pthread_cond_destroy(&sync->data_available_cv);
+	pthread_cond_destroy(&sync->free_available_cv);
+}
+
 inline void cbuffer_write(CBuffer *cbuffer, char *buffer, int size) {
 	CBufferSync *sync = &cbuffer->sync;
 	CBufferStats *stats = &cbuffer->stats;

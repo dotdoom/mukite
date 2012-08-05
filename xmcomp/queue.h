@@ -14,7 +14,8 @@ typedef struct StanzaEntry_t {
 	int
 		// Number of real data bytes in the buffer
 		data_size,
-		// Actual buffer size. Sometimes buffer is preallocated larger for performance reasons
+		// Actual buffer size.
+		// Sometimes buffer is preallocated larger than data for performance reasons
 		buffer_size;
 
 	// Linked list
@@ -62,7 +63,8 @@ typedef struct {
 	int network_buffer_size;
 } StanzaQueue;
 
-inline void queue_init(StanzaQueue *, int);
+void queue_init(StanzaQueue *, int);
+void queue_destroy(StanzaQueue *);
 
 inline StanzaEntry *queue_pop_free(StanzaQueue *);
 inline void queue_push_data(StanzaQueue *, StanzaEntry *);

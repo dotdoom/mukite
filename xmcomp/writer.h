@@ -6,7 +6,7 @@
 
 typedef struct {
 	BOOL enabled;
-	Socket socket;
+	Socket *socket;
 	CBuffer cbuffer;
 } WriterConfig;
 
