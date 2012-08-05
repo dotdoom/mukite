@@ -10,7 +10,7 @@
 	{ \
 		chunk_size = (size); \
 		if (buffer->data_end + chunk_size > buffer->end) { \
-			return 0; \
+			return FALSE; \
 		} \
 		memcpy(buffer->data_end, (data), chunk_size); \
 		buffer->data_end += chunk_size; \
@@ -66,7 +66,7 @@ int build_mucadm_node(MucAdmNode *node, BuilderBuffer *buffer) {
 		BUF_PUSH(JID_STR(node->jid), JID_LEN(node->jid));
 	}
 	BUF_PUSH_LITERAL("'/></x>");
-	return 1;
+	return TRUE;
 }
 
 int build_packet(BuilderPacket *packet, BuilderBuffer *buffer) {
@@ -127,7 +127,7 @@ int build_packet(BuilderPacket *packet, BuilderBuffer *buffer) {
 		BUF_PUSH_IFBPT(packet->user_data);
 		if (packet->name == 'p') {
 			if (!build_mucadm_node(&packet->participant, buffer)) {
-				return 0;
+				return FALSE;
 			}
 		} else {
 			BUF_PUSH_IFBPT(packet->system_data);
@@ -145,5 +145,5 @@ int build_packet(BuilderPacket *packet, BuilderBuffer *buffer) {
 		}
 	}
 
-	return 1;
+	return FALSE;
 }

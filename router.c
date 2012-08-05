@@ -15,7 +15,7 @@ void cleanup_erase(IncomingPacket *packet) {
 	}
 }
 
-int cutoff_mucnode(IncomingPacket *packet) {
+BOOL cutoff_mucnode(IncomingPacket *packet) {
 	BufferPtr buffer = packet->inner, node = packet->inner;
 	Buffer node_name;
 	XmlAttr attr;
@@ -44,7 +44,7 @@ int cutoff_mucnode(IncomingPacket *packet) {
 					LDEBUG("found a muc#user node, setting erase");
 					if (erase_index == MAX_ERASE_CHUNKS) {
 						LWARN("cannot allocate an erase chunk; muc#user is not removable, thus dropping stanza");
-						return 0;
+						return FALSE;
 					}
 					packet->erase[erase_index].data = node_start;
 					packet->erase[erase_index].end = node.end;
@@ -54,7 +54,7 @@ int cutoff_mucnode(IncomingPacket *packet) {
 		}
 	}
 
-	return 1;
+	return TRUE;
 }
 
 int send_to(BuilderPacket *output, SendCallback *send, ParticipantEntry *receiver, int limit) {

@@ -1,7 +1,7 @@
-# XMPP Component configuration file
-# Use: xmcomponent <config
-# to run xmcomp using this configuration.
-# Lines starting with '#' are considered comments
+# Mukite XMPP Component configuration file
+# Use: mukite <config
+# to run mukite using this configuration.
+# Lines starting immediately with '#' are considered comments
 
 # Network settings.
 # TCP server (resolved with A record)

@@ -26,6 +26,6 @@ typedef struct {
 	char *data, *data_end, *end;
 } BuilderBuffer;
 
-int build_packet(BuilderPacket *packet, BuilderBuffer *buffer);
+BOOL build_packet(BuilderPacket *packet, BuilderBuffer *buffer);
 
 #endif
