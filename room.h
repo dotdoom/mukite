@@ -33,6 +33,7 @@ typedef struct ParticipantEntry_t {
 } ParticipantEntry;
 
 #define MUC_FLAG_SEMIANONYMOUS 1
+#define MUC_FLAG_LOGGIN 2
 
 typedef struct Room_t {
 	Buffer node, name, subject;
@@ -49,8 +50,6 @@ typedef struct Room_t {
 		*admins,
 		*members,
 		*outcasts;
-
-	char affiliation_role_cache_buffer[100];
 
 	struct Room_t *prev, *next;
 	pthread_mutex_t sync;

@@ -15,7 +15,7 @@ typedef struct {
 #define JID_FULL (JID_NODE | JID_HOST | JID_RESOURCE)
 #define JID_CMP_NULLWC 8
 
-int jid_struct(BufferPtr *jid_string, Jid *jid_struct);
+BOOL jid_struct(BufferPtr *jid_string, Jid *jid_struct);
 
 int jid_cmp(Jid *jid1, Jid *jid2, int mode);
 int jid_strcmp(Jid *jid, Buffer *str, int part);

@@ -55,7 +55,8 @@ static const int role_sizes[] = {
 };
 
 int build_mucadm_node(MucAdmNode *node, BuilderBuffer *buffer) {
-	int chunk_size;
+	int i, code, chunk_size;
+	char code_str[3];
 
 	BUF_PUSH_LITERAL("<x xmlns='http://jabber.org/protocol/muc#user'><item affiliation='");
 	BUF_PUSH(affiliations[node->affiliation+1], affiliation_sizes[node->affiliation+1]);
@@ -65,11 +66,22 @@ int build_mucadm_node(MucAdmNode *node, BuilderBuffer *buffer) {
 		BUF_PUSH_LITERAL("' jid='");
 		BUF_PUSH(JID_STR(node->jid), JID_LEN(node->jid));
 	}
+
+	for (i = 0; i < MAX_STATUS_CODES && (code = node->status_codes[i]); ++i) {
+		BUF_PUSH_LITERAL("'/><status code='");
+		code -= (code_str[2] = code % 10);
+		code -= (code_str[1] = code % 100);
+		code_str[0] = code + '0';
+		code_str[1] += '0';
+		code_str[2] += '0';
+		BUF_PUSH(code_str, 3);
+	}
+
 	BUF_PUSH_LITERAL("'/></x>");
 	return TRUE;
 }
 
-int build_packet(BuilderPacket *packet, BuilderBuffer *buffer) {
+BOOL build_packet(BuilderPacket *packet, BuilderBuffer *buffer) {
 	int chunk_size;
 
 	LDEBUG("building packet: started");
@@ -145,5 +157,5 @@ int build_packet(BuilderPacket *packet, BuilderBuffer *buffer) {
 		}
 	}
 
-	return FALSE;
+	return TRUE;
 }

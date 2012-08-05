@@ -11,7 +11,7 @@ void room_init(Room *room, BufferPtr *node) {
 	room->node.size = BPT_SIZE(node);
 	room->node.data = malloc(room->node.size);
 	memcpy(room->node.data, node->data, room->node.size);
-	room->flags = MUC_FLAG_SEMIANONYMOUS;
+//	room->flags = MUC_FLAG_SEMIANONYMOUS;
 
 	room->default_role = ROLE_PARTICIPANT;
 }

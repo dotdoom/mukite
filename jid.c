@@ -5,7 +5,7 @@
 
 #include "jid.h"
 
-int jid_struct(BufferPtr *jid_string, Jid *jid_struct) {
+BOOL jid_struct(BufferPtr *jid_string, Jid *jid_struct) {
 	int part = JID_NODE;
 	char *part_start = jid_string->data,
 		*current = jid_string->data;
@@ -51,7 +51,7 @@ int jid_struct(BufferPtr *jid_string, Jid *jid_struct) {
 			(BPT_SIZE(&jid_struct->host) > JID_PART_LIMIT) ||
 			(BPT_SIZE(&jid_struct->node) > JID_PART_LIMIT) ||
 			(jid_struct->resource.data && BPT_SIZE(&jid_struct->resource) > JID_PART_LIMIT)) {
-		return -1;
+		return FALSE;
 	}
 
 	LDEBUG("split the JID '%.*s': node '%.*s', host '%.*s', resource '%.*s'",
@@ -60,7 +60,7 @@ int jid_struct(BufferPtr *jid_string, Jid *jid_struct) {
 			BPT_SIZE(&jid_struct->host), jid_struct->host.data,
 			jid_struct->resource.data ? BPT_SIZE(&jid_struct->resource) : 0, jid_struct->resource.data);
 
-	return 0;
+	return TRUE;
 }
 
 int jid_cmp(Jid *jid1, Jid *jid2, int mode) {

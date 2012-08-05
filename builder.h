@@ -3,9 +3,12 @@
 
 #include "xmcomp/common.h"
 
+#define MAX_STATUS_CODES 4
+
 typedef struct {
 	int affiliation, role;
 	Jid *jid;
+	int status_codes[MAX_STATUS_CODES];
 } MucAdmNode;
 
 typedef struct {

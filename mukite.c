@@ -8,8 +8,6 @@
 #include "xmcomp/logger.h"
 
 #include "config.h"
-//#include "writer.h"
-//#include "xcwrapper.h"
 
 #define APP_NAME "mukite"
 

@@ -5,6 +5,15 @@
 
 #include "router.h"
 
+#define STATUS_SEMIANONYMOUS 100
+#define STATUS_SELF_PRESENCE 110
+#define STATUS_LOGGING_ENABLED 170
+#define STATUS_NICKNAME_ENFORCED 210
+#define STATUS_BANNED 301
+#define STATUS_NICKNAME_CHANGED 303
+#define STATUS_KICKED 307
+#define STATUS_NONMEMBER_REMOVED 321
+
 #define SEND(callback, send_data) \
 	((callback)->proc((callback)->data, (send_data)))
 
@@ -154,6 +163,9 @@ int route(IncomingPacket *packet, SendCallback *send, char *hostname) {
 
 				sender = receiver;
 				output.from_nick = sender->nick;
+				// This presence will later be delivered to joined occupant,
+				// and MUST contain a status code (XEP-0045)
+				//output.participant.status_codes[0] = STATUS_SELF_PRESENCE;
 			} else {
 				cleanup_erase(packet);
 			}

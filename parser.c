@@ -91,13 +91,13 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 				BPT_SIZE(&attr.value), attr.value.data);
 		erase = 1;
 		if (BPT_EQ_LIT("from", &attr.name)) {
-			if (jid_struct(&attr.value, &packet->real_from)) {
+			if (!jid_struct(&attr.value, &packet->real_from)) {
 				LWARN("'from' jid malformed: '%.*s'",
 						BPT_SIZE(&attr.value), attr.value.data);
 				return FALSE;
 			}
 		} else if (BPT_EQ_LIT("to", &attr.name)) {
-			if (jid_struct(&attr.value, &packet->proxy_to)) {
+			if (!jid_struct(&attr.value, &packet->proxy_to)) {
 				LWARN("'to' jid malformed: '%.*s'",
 						BPT_SIZE(&attr.value), attr.value.data);
 				return FALSE;
