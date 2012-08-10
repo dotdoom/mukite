@@ -2,27 +2,33 @@
 #define XMCOMP_LOGGER_H
 
 #include <stdio.h>
-#include <time.h>
-#include <pthread.h>
-
-#ifdef LOG_PTHREAD
-#	define LOG_THREAD_STR "Thread[%lu] "
-#	define LOG_THREAD_PAR (unsigned long)pthread_self(),
-#else
-#	define LOG_THREAD_STR
-#	define LOG_THREAD_PAR
-#endif
-#define LOG_THREAD_PRE
 
 #ifdef LOG_CTIME
+#	include <time.h>
+	extern time_t log_timestamp;
 #	define LOG_TIME_PRE time(&log_timestamp);
 #	define LOG_TIME_STR "%s"
 #	define LOG_TIME_PAR ctime(&log_timestamp),
-	extern time_t log_timestamp;
+#	define LOG_TIME_POST
 #else
 #	define LOG_TIME_PRE
+#	define LOG_TIME_POST
 #	define LOG_TIME_STR
 #	define LOG_TIME_PAR
+#endif
+
+#ifdef LOG_PTHREAD
+#	include <pthread.h>
+	extern pthread_mutex_t log_mutex;
+#	define LOG_THREAD_PRE pthread_mutex_lock(&log_mutex);
+#	define LOG_THREAD_STR "Thread[%lu] "
+#	define LOG_THREAD_PAR (unsigned long)pthread_self(),
+#	define LOG_THREAD_POST pthread_mutex_unlock(&log_mutex);
+#else
+#	define LOG_THREAD_PRE
+#	define LOG_THREAD_STR
+#	define LOG_THREAD_PAR
+#	define LOG_THREAD_POST
 #endif
 
 extern int log_level;
@@ -41,6 +47,8 @@ extern const char* log_level_names[];
 					(level >= 0 && level < 4) ? log_level_names[level] : "unknw", \
 					level, LOG_THREAD_PAR LOG_TIME_PAR \
 					__DATE__, __TIME__, __FILE__, __func__, __LINE__, ## __VA_ARGS__); \
+			LOG_TIME_POST \
+			LOG_THREAD_POST \
 		} \
 	}
 
