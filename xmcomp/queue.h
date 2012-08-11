@@ -7,7 +7,7 @@
 
 #include <pthread.h>
 
-typedef struct StanzaEntry_t {
+typedef struct StanzaEntry {
 	// A buffer that keeps actual data
 	char *buffer;
 
@@ -19,7 +19,7 @@ typedef struct StanzaEntry_t {
 		buffer_size;
 
 	// Linked list
-	struct StanzaEntry_t *next;
+	struct StanzaEntry *next;
 } StanzaEntry;
 
 typedef struct {

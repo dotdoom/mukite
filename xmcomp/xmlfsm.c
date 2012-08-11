@@ -139,3 +139,23 @@ int xmlfsm_node_name(BufferPtr *buffer, Buffer *name) {
 
 	return XMLPARSE_SUCCESS;
 }
+
+BOOL xmlfsm_find_node(BufferPtr *buffer, Buffer *find_node_name, BufferPtr *node) {
+	char *node_start = 0;
+	Buffer current_node_name;
+
+	for (; xmlfsm_skip_node(buffer, 0, 0) == XMLPARSE_SUCCESS; node->data = buffer->data) {
+		node->end = buffer->data;
+		node_start = node->data;
+
+		xmlfsm_node_name(node, &current_node_name);
+		if (current_node_name.size == find_node_name->size) {
+			if (!memcmp(current_node_name.data, find_node_name->data, current_node_name.size)) {
+				node->data = node_start;
+				return TRUE;
+			}
+		}
+	}
+
+	return FALSE;
+}
