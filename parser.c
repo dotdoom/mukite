@@ -9,9 +9,6 @@
 #include "xmcomp/sighelper.h"
 
 #include "router.h"
-#include "room.h"
-#include "rooms.h"
-#include "router.h"
 #include "builder.h"
 #include "config.h"
 
@@ -149,40 +146,41 @@ typedef struct {
 	CBuffer *cbuffer;
 } LocalBufferStorage;
 
-int send_packet(void *void_local_buffer_storage, BuilderPacket *packet) {
-	int retval;
+BOOL send_packet(void *void_local_buffer_storage, BuilderPacket *packet) {
 	LocalBufferStorage *lbs = (LocalBufferStorage *)void_local_buffer_storage;
+	lbs->buffer.data_end = lbs->buffer.data;
 	if (build_packet(packet, &lbs->buffer)) {
 		cbuffer_write(lbs->cbuffer, lbs->buffer.data, lbs->buffer.data_end - lbs->buffer.data);
-		retval = 1;
+		return TRUE;
 	} else {
-		LERROR("output buffer (%d bytes) is not large enough to hold a stanza", BPT_SIZE(&lbs->buffer));
-		retval = 0;
+		LERROR("parser output buffer (%d bytes) is not large enough to hold a stanza",
+				BPT_SIZE(&lbs->buffer));
+		return FALSE;
 	}
-	lbs->buffer.data_end = lbs->buffer.data;
-	return retval;
 }
 
 void *parser_thread_entry(void *void_parser_config) {
 	ParserConfig *parser_config = (ParserConfig *)void_parser_config;
 	Config *config = (Config *)parser_config->global_config;
-	Rooms *rooms = &config->rooms;
 	StanzaQueue *queue = &config->reader_thread.queue;
 	int allocated_buffer_size = config->parser.buffer;
 
 	StanzaEntry *stanza_entry;
-	IncomingPacket incoming_packet;
 	BufferPtr stanza_entry_buffer;
 	LocalBufferStorage lbs;
-	SendCallback send_callback;
 	int receivers;
+	RouterChunk router_chunk;
 
 	lbs.buffer.data = malloc(allocated_buffer_size);
 	lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
 	lbs.cbuffer = &config->writer_thread.cbuffer;
 
-	send_callback.proc = send_packet;
-	send_callback.data = &lbs;
+	router_chunk.send.proc = send_packet;
+	router_chunk.send.data = &lbs;
+	router_chunk.rooms = &config->rooms;
+	router_chunk.acl = &config->acl_config;
+	router_chunk.hostname.data = config->component.hostname;
+	router_chunk.hostname.size = strlen(config->component.hostname);
 
 	LINFO("started");
 	sighelper_sigblockall();
@@ -199,13 +197,10 @@ void *parser_thread_entry(void *void_parser_config) {
 			stanza_entry_buffer.data = stanza_entry->buffer;
 			stanza_entry_buffer.end = stanza_entry->buffer + stanza_entry->data_size;
 
-			if (parse_incoming_packet(&stanza_entry_buffer, &incoming_packet)) {
-				if ((incoming_packet.room = rooms_acquire(rooms, &incoming_packet.proxy_to))) {
-					lbs.buffer.data_end = lbs.buffer.data;
-					receivers = route(&incoming_packet, &send_callback, config->component.hostname);
-					LDEBUG("forwarded to %d JIDs", receivers);
-					rooms_release(incoming_packet.room);
-				}
+			if (parse_incoming_packet(&stanza_entry_buffer, &router_chunk.packet)) {
+				lbs.buffer.data_end = lbs.buffer.data;
+				receivers = router_process(&router_chunk);
+				LDEBUG("forwarded to %d JIDs", receivers);
 			}
 		}
 

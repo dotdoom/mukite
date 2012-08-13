@@ -6,13 +6,17 @@
 #define ACL_MUC_ADMIN 3
 #define ACL_COMPONENT_ADMIN 7
 
-typedef struct ACLEntry_t {
+typedef struct ACLEntry {
 	Jid jid;
 	int role;
-	struct ACLEntry_t *next;
+	struct ACLEntry *next;
 } ACLEntry;
 
-void acl_init(ACLEntry *list);
-int acl_role(ACLEntry *list, Jid *);
+typedef struct {
+	int default_role;
+	ACLEntry *first;
+} ACLConfig;
+
+int acl_role(ACLConfig *acl, Jid *);
 
 #endif

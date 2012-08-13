@@ -61,6 +61,9 @@ BOOL config_read(Config *config) {
 		READ_CONFIG_INT(parser.threads)
 		READ_CONFIG_INT(parser.buffer)
 
+		READ_CONFIG_STR(acl.data_file)
+		READ_CONFIG_INT(acl.default_role)
+
 		READ_CONFIG_INT(logger.level)
 
 		LWARN("unknown config option '%s'", cfg_opt_name);
@@ -98,6 +101,8 @@ void config_apply(Config *config) {
 		config->reader.block;
 	config->reader_thread.queue.network_buffer_size =
 		config->reader.buffer;
+	config->acl_config.default_role =
+		config->acl.default_role;
 
 	if (config->parser.threads > PARSERS_COUNT_LIMIT) {
 		LERROR("%d exceeds parsers limit %d, shrinking",

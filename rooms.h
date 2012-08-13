@@ -16,8 +16,13 @@ typedef struct {
 void rooms_init(Rooms *);
 void rooms_destroy(Rooms *);
 
-Room *rooms_acquire(Rooms *, Jid *);
+Room *rooms_create(Rooms *, Jid *);
+Room *rooms_find(Rooms *, Jid *);
+void rooms_acquire(Room *);
 void rooms_release(Room *);
+
+typedef struct RouterChunk RouterChunk;
+int rooms_route(RouterChunk *);
 
 BOOL rooms_serialize(Rooms *, FILE *);
 BOOL rooms_deserialize(Rooms *, FILE *, int);

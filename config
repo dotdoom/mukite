@@ -44,6 +44,10 @@ reader.buffer 1048576
 # Changing this option requires master restart.
 writer.buffer 1048576
 
+## Access Control List
+# Default role name
+acl.default_role 1
+
 ## Logger config
 # Logging output filter. Log messages lower than this level will not be printed
 # 0 - debug

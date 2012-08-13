@@ -24,17 +24,18 @@
 #define PARTICIPANTS_LIMIT 1024
 #define AFFILIATION_LIST_LIMIT 4096
 
-typedef struct AffiliationEntry_t {
+typedef struct AffiliationEntry {
 	Jid jid;
 	Buffer reason;
-	struct AffiliationEntry_t *next;
+	struct AffiliationEntry *next;
 } AffiliationEntry;
 
-typedef struct ParticipantEntry_t {
+typedef struct ParticipantEntry {
 	Jid jid;
 	Buffer nick;
 	int affiliation, role;
-	struct ParticipantEntry_t *prev, *next;
+	BufferPtr presence;
+	struct ParticipantEntry *prev, *next;
 } ParticipantEntry;
 
 #define MUC_FLAG_ALLOWPM 1
@@ -49,6 +50,7 @@ typedef struct ParticipantEntry_t {
 #define MUC_FLAG_SEMIANONYMOUS (1 << 9)
 #define MUC_FLAG_IQ_PROXY (1 << 10)
 #define MUC_FLAG_INVITES (1 << 11)
+#define MUC_FLAG_VISITORSPM (1 << 12)
 
 #define MUC_FLAGS_DEFAULT (MUC_FLAG_ALLOWPM | \
 	MUC_FLAG_CHANGESUBJECT | \
@@ -58,7 +60,7 @@ typedef struct ParticipantEntry_t {
 	MUC_FLAG_IQ_PROXY | \
 	MUC_FLAG_INVITES)
 
-typedef struct Room_t {
+typedef struct Room {
 	Buffer node,
 		title,
 		description,
@@ -72,6 +74,7 @@ typedef struct Room_t {
 
 	ParticipantEntry
 		*participants;
+	int participants_count;
 
 	AffiliationEntry
 		*owners,
@@ -79,23 +82,26 @@ typedef struct Room_t {
 		*members,
 		*outcasts;
 
-	struct Room_t *prev, *next;
+	struct Room *prev, *next;
 	pthread_mutex_t sync;
 } Room;
 
-void room_init(Room *room, BufferPtr *node);
-void room_destroy(Room *room);
+void room_init(Room *, BufferPtr *);
+void room_destroy(Room *);
 
-void room_lock(Room *room);
-void room_unlock(Room *room);
+void room_lock(Room *);
+void room_unlock(Room *);
 
-ParticipantEntry *room_join(Room *room, Jid *jid, BufferPtr *nick);
+int room_role_for_affiliation(Room *, int);
+
+ParticipantEntry *room_join(Room *room, Jid *jid, BufferPtr *nick, int affiliation);
 void room_leave(Room *room, ParticipantEntry *participant);
 
 ParticipantEntry *room_participant_by_nick(Room *room, BufferPtr *nick);
 ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid);
 
-void room_moderate(Room *room, ParticipantEntry *user, int affiliation, int role);
+typedef struct RouterChunk RouterChunk;
+int room_route(Room *, RouterChunk *);
 
 BOOL room_serialize(Room *, FILE *);
 BOOL room_deserialize(Room *, FILE *);

@@ -1,10 +1,11 @@
 #ifndef ROUTER_H
 #define ROUTER_H
 
-#include "jid.h"
 #include "xmcomp/xmlfsm.h"
+
+#include "jid.h"
 #include "builder.h"
-#include "room.h"
+#include "config.h"
 
 #define MAX_ERASE_CHUNKS 5
 
@@ -17,17 +18,25 @@ typedef struct {
 
 	// buffer chunks to be erased (from, to, type and muc#user in presence)
 	BufferPtr erase[MAX_ERASE_CHUNKS];
-
-	Room *room;
 } IncomingPacket;
 
-typedef int(*SendProc)(void *, BuilderPacket *);
+typedef BOOL(*SendProc)(void *, BuilderPacket *);
 
 typedef struct {
 	SendProc proc;
 	void *data;
 } SendCallback;
 
-int route(IncomingPacket *, SendCallback *, char *);
+typedef struct RouterChunk {
+	IncomingPacket packet;
+	SendCallback send;
+	Buffer hostname;
+	Rooms *rooms;
+	ACLConfig *acl;
+} RouterChunk;
+
+int router_process(RouterChunk *);
+void router_cleanup(IncomingPacket *);
+int router_error(RouterChunk *, char *error_type, char *error_name);
 
 #endif

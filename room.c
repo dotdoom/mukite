@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "xmcomp/logger.h"
+#include "router.h"
 
 #include "room.h"
 
@@ -12,8 +13,20 @@ void room_init(Room *room, BufferPtr *node) {
 	room->node.data = malloc(room->node.size);
 	memcpy(room->node.data, node->data, room->node.size);
 	room->flags = MUC_FLAGS_DEFAULT;
+	room->max_participants = 100;
 
 	room->default_role = ROLE_PARTICIPANT;
+}
+
+int room_role_for_affiliation(Room *room, int affiliation) {
+	switch (affiliation) {
+		case AFFIL_MEMBER:
+			return ROLE_PARTICIPANT;
+		case AFFIL_ADMIN:
+		case AFFIL_OWNER:
+			return ROLE_MODERATOR;
+	}
+	return room->default_role;
 }
 
 inline AffiliationEntry *find_affiliation(AffiliationEntry *entry, Jid *jid) {
@@ -47,7 +60,8 @@ int room_get_affiliation(Room *room, Jid *jid) {
 	return AFFIL_NONE;
 }
 
-ParticipantEntry *room_join(Room *room, Jid *jid, BufferPtr *nick) {
+
+ParticipantEntry *room_join(Room *room, Jid *jid, BufferPtr *nick, int affiliation) {
 	ParticipantEntry *participant = malloc(sizeof(*participant));
 
 	LDEBUG("'%.*s' is joining the room as '%.*s'",
@@ -67,10 +81,13 @@ ParticipantEntry *room_join(Room *room, Jid *jid, BufferPtr *nick) {
 	participant->prev = 0;
 	room->participants = participant;
 
-	participant->role = room->default_role;
-	participant->affiliation = room_get_affiliation(room, jid);
+	++room->participants_count;
 
-	LDEBUG("created new participant, role %d affil %d", participant->role, participant->affiliation);
+	participant->affiliation = affiliation;
+	participant->role = room_role_for_affiliation(room, affiliation);
+
+	LDEBUG("created new participant #%d, role %d affil %d",
+			room->participants_count, participant->role, participant->affiliation);
 
 	return participant;
 }
@@ -85,12 +102,15 @@ void room_leave(Room *room, ParticipantEntry *participant) {
 		participant->next->prev = participant->prev;
 	}
 
-	LDEBUG("'%.*s' (rJID '%.*s') has left '%.*s'",
-			participant->nick.size, participant->nick.data,
+	LDEBUG("participant #%d '%.*s' (JID '%.*s') has left '%.*s'",
+			room->participants_count, participant->nick.size, participant->nick.data,
 			JID_LEN(&participant->jid), JID_STR(&participant->jid),
 			room->node.size, room->node.data);
 
 	jid_free(&participant->jid);
+	if (participant->presence.data) {
+		free(participant->presence.data);
+	}
 	free(participant->nick.data);
 }
 
@@ -192,4 +212,207 @@ BOOL room_deserialize(Room *room, FILE *input) {
 		affiliations_deserialize(&room->admins, input, AFFILIATION_LIST_LIMIT) &&
 		affiliations_deserialize(&room->members, input, AFFILIATION_LIST_LIMIT) &&
 		affiliations_deserialize(&room->outcasts, input, AFFILIATION_LIST_LIMIT);
+}
+
+BOOL erase_muc_user_node(IncomingPacket *packet) {
+	BufferPtr buffer = packet->inner, node = buffer;
+	Buffer node_name;
+	XmlAttr attr;
+	int erase_index = 0;
+	char *node_start = 0;
+
+	// First find the next free index of 'erase' block
+	for (; erase_index < MAX_ERASE_CHUNKS; ++erase_index) {
+		if (!packet->erase[erase_index].data) {
+			break;
+		}
+	}
+
+	for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS; node.data = buffer.data) {
+		node.end = buffer.data;
+		node_start = node.data;
+
+		xmlfsm_node_name(&node, &node_name);
+		if (node_name.size == 1 && *node_name.data == 'x') {
+			while (xmlfsm_get_attr(&node, &attr) == XMLPARSE_SUCCESS) {
+				if (
+						!BPT_EQ_LIT("xmlns", &attr.name) &&
+						!BPT_EQ_LIT("http://jabber.org/protocol/muc#user", &attr.value)) {
+					LDEBUG("found a muc#user node, setting erase");
+					if (erase_index == MAX_ERASE_CHUNKS) {
+						LWARN("cannot allocate an erase chunk; muc#user is not removable, thus dropping stanza");
+						return FALSE;
+					}
+					packet->erase[erase_index].data = node_start;
+					packet->erase[erase_index].end = node.end;
+					++erase_index;
+				}
+			}
+		}
+	}
+
+	return TRUE;
+}
+
+int send_to_participants(BuilderPacket *output, SendCallback *send, ParticipantEntry *participant, int limit) {
+	int sent = 0;
+	for (; participant && sent < limit; participant = participant->next, ++sent) {
+		LDEBUG("routing stanza to '%.*s', real JID '%.*s'",
+				participant->nick.size, participant->nick.data,
+				JID_LEN(&participant->jid), JID_STR(&participant->jid));
+		output->to = participant->jid;
+		if (send->proc(send->data, output)) {
+			++sent;
+		}
+	}
+
+	return sent;
+}
+
+int room_route(Room *room, RouterChunk *chunk) {
+	ParticipantEntry *sender = 0, *receiver = 0;
+	IncomingPacket *packet = &chunk->packet;
+	BuilderPacket output;
+	int affiliation, routed_receivers = 0;
+
+	memset(&output, 0, sizeof(output));
+	output.name = packet->name;
+	output.type = packet->type;
+	output.from_node = room->node;
+	output.from_host = chunk->hostname;
+	output.header = packet->header;
+
+	sender = room_participant_by_jid(room, &packet->real_from);
+	if (sender) {
+		output.from_nick = sender->nick;
+		LDEBUG("got sender in the room, JID='%.*s', nick='%.*s'",
+				JID_LEN(&sender->jid), JID_STR(&sender->jid),
+				sender->nick.size, sender->nick.data);
+	} else {
+		LDEBUG("sender is not in the room yet");
+	}
+	
+	switch (packet->name) {
+		case 'm':
+			if (!sender) {
+				return router_error(chunk, "cancel", "item-not-found");
+			}
+
+			// TODO(artem): check words filter for packet->inner
+
+			output.user_data = packet->inner;
+			if (packet->type == 'c') {
+				if (!(receiver = room_participant_by_nick(room, &packet->proxy_to.resource))) {
+					return router_error(chunk, "cancel", "item-not-found");
+				}
+
+				if (sender->role == ROLE_VISITOR && (room->flags & MUC_FLAG_VISITORSPM) == MUC_FLAG_VISITORSPM) {
+					return router_error(chunk, "cancel", "forbidden");
+				}
+
+				LDEBUG("sending private message to '%.*s', real JID '%.*s'",
+						receiver->nick.size, receiver->nick.data,
+						JID_LEN(&receiver->jid), JID_STR(&receiver->jid));
+				router_cleanup(packet);
+				routed_receivers += send_to_participants(&output, &chunk->send, receiver, 1);
+			} else {
+				if (sender->role < ROLE_PARTICIPANT) {
+					return router_error(chunk, "cancel", "forbidden");
+				}
+
+				router_cleanup(packet);
+				routed_receivers += send_to_participants(&output, &chunk->send, room->participants, 1 << 30);
+			}
+			break;
+		case 'p':
+			if (!erase_muc_user_node(packet)) {
+				return 0; // stanza is obviously not valid, just drop silently
+			}
+
+			if (!sender) {
+				// Participant not in room, but wants to join
+				if (packet->type == 'u') {
+					// There's no use in 'unavailable' presence for the not-in-room user
+					return 0;
+				}
+
+				if (room_participant_by_nick(room, &packet->proxy_to.resource)) {
+					return router_error(chunk, "modify", "conflict");
+				}
+
+				// TODO(artem): check global registered nickname
+				// TODO(artem): check password
+				// TODO(artem): load room history as requested
+
+				if ((acl_role(chunk->acl, &packet->real_from) & ACL_MUC_ADMIN) == ACL_MUC_ADMIN) {
+					affiliation = AFFIL_OWNER;
+				} else {
+					if (room->participants_count >= room->max_participants) {
+						return router_error(chunk, "cancel", "forbidden");
+					}
+					affiliation = room_get_affiliation(room, &packet->real_from);
+					if (affiliation < AFFIL_NONE) {
+						return router_error(chunk, "cancel", "forbidden");
+					}
+					if ((room->flags & MUC_FLAG_MEMBERSONLY) == MUC_FLAG_MEMBERSONLY &&
+							affiliation < AFFIL_MEMBER) {
+						return router_error(chunk, "cancel", "forbidden");
+					}
+				}
+				receiver = room_join(room, &packet->real_from, &packet->proxy_to.resource, affiliation);
+				router_cleanup(packet);
+
+				// Skip first participant as we know this is the one who just joined
+				for (sender = room->participants->next; sender; sender = sender->next) {
+					output.from_nick = sender->nick;
+					output.participant.affiliation = sender->affiliation;
+					output.participant.role = sender->role;
+					output.user_data = sender->presence;
+					if (receiver->role == ROLE_MODERATOR ||
+							(room->flags & MUC_FLAG_SEMIANONYMOUS) != MUC_FLAG_SEMIANONYMOUS) {
+						output.participant.jid = &sender->jid;
+					} else {
+						output.participant.jid = 0;
+					}
+					routed_receivers += send_to_participants(&output, &chunk->send, receiver, 1);
+				}
+				sender = receiver;
+			} else {
+				// TODO(artem): check if visitors can change status
+				router_cleanup(packet);
+			}
+
+			// Broadcast sender's presence to all participants
+			output.participant.affiliation = sender->affiliation;
+			output.participant.role = sender->role;
+			output.from_nick = sender->nick;
+			output.user_data = packet->inner;
+			for (receiver = room->participants; receiver; receiver = receiver->next) {
+				output.to = receiver->jid;
+				if (receiver->role == ROLE_MODERATOR ||
+						(room->flags & MUC_FLAG_SEMIANONYMOUS) != MUC_FLAG_SEMIANONYMOUS) {
+					output.participant.jid = &sender->jid;
+				} else {
+					output.participant.jid = 0;
+				}
+				routed_receivers += send_to_participants(&output, &chunk->send, receiver, 1);
+			}
+
+			if (packet->type == 'u') {
+				room_leave(room, sender);
+			} else {
+				// Cache participant's presence to broadcast it to newcomers
+				if (sender->presence.data) {
+					sender->presence.data = realloc(sender->presence.data, BPT_SIZE(&packet->inner));
+				} else {
+					sender->presence.data = malloc(BPT_SIZE(&packet->inner));
+				}
+				sender->presence.end = sender->presence.data + BPT_SIZE(&packet->inner);
+				memcpy(sender->presence.data, packet->inner.data, BPT_SIZE(&packet->inner));
+			}
+
+			break;
+	}
+
+	return routed_receivers;
 }

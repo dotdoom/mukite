@@ -7,6 +7,7 @@
 
 #include "rooms.h"
 #include "parser.h"
+#include "acl.h"
 
 #define PARSERS_COUNT_LIMIT 1024
 
@@ -39,6 +40,11 @@ typedef struct {
 	} parser;
 
 	struct {
+		char data_file[CONFIG_OPTION_LENGTH];
+		int default_role;
+	} acl;
+
+	struct {
 		int level;
 	} logger;
 
@@ -54,6 +60,7 @@ typedef struct {
 	int parser_threads_count;
 	
 	Rooms rooms;
+	ACLConfig acl_config;
 } Config;
 
 void config_init(Config *, char *);
