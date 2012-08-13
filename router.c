@@ -62,7 +62,7 @@ int router_process(RouterChunk *chunk) {
 	}
 }
 
-int router_error(RouterChunk *chunk, char *error_type, char *error_name) {
-	LDEBUG("routing an error: %s/%s", error_type, error_name);
+int router_error(RouterChunk *chunk, XMPPError *error) {
+	LDEBUG("routing an error %s: %s/%s: %s", error->code, error->type, error->name, error->text);
 	return 0;
 }

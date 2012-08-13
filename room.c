@@ -6,6 +6,58 @@
 
 #include "room.h"
 
+static XMPPError error_definitions[] = {
+	{
+#define ERROR_EXTERNAL_MESSAGE 0
+		.code = "405",
+		.name = "not-allowed",
+		.type = "cancel",
+		.text = "Only participants are allowed to send messages to this conference"
+	}, {
+#define ERROR_PARTICIPANT_NOT_IN_ROOM 1
+		.code = "404",
+		.name = "item-not-found",
+		.type = "cancel",
+		.text = "Participant is not in the conference room"
+	}, {
+#define ERROR_NO_VISITORS_PM 2
+		.code = "403",
+		.name = "forbidden",
+		.type = "cancel",
+		.text = "Visitors are not allowed to send private messages here"
+	}, {
+#define ERROR_NO_VISITORS_PUBLIC 3
+		.code = "403",
+		.name = "forbidden",
+		.type = "cancel",
+		.text = "Visitors are not allowed to send messages to the public chat"
+	}, {
+#define ERROR_OCCUPANT_CONFLICT 4
+		.code = "",
+		.name = "conflict",
+		.type = "modify",
+		.text = "This nickname is already used by another occupant"
+	}, {
+#define ERROR_OCCUPANTS_LIMIT 5
+		.code = "",
+		.name = "not-allowed",
+		.type = "wait",
+		.text = "Maximum number of occupants has been reached for this room"
+	}, {
+#define ERROR_BANNED 6
+		.code = "403",
+		.name = "forbidden",
+		.type = "cancel",
+		.text = "You are banned from this room"
+	}, {
+#define ERROR_MEMBERS_ONLY 7
+		.code = "403",
+		.name = "forbidden",
+		.type = "cancel",
+		.text = "Only members are allowed to enter this room"
+	}
+};
+
 void room_init(Room *room, BufferPtr *node) {
 	memset(room, 0, sizeof(*room));
 	pthread_mutex_init(&room->sync, 0);
@@ -295,7 +347,7 @@ int room_route(Room *room, RouterChunk *chunk) {
 	switch (packet->name) {
 		case 'm':
 			if (!sender) {
-				return router_error(chunk, "cancel", "item-not-found");
+				return router_error(chunk, &error_definitions[ERROR_EXTERNAL_MESSAGE]);
 			}
 
 			// TODO(artem): check words filter for packet->inner
@@ -303,11 +355,11 @@ int room_route(Room *room, RouterChunk *chunk) {
 			output.user_data = packet->inner;
 			if (packet->type == 'c') {
 				if (!(receiver = room_participant_by_nick(room, &packet->proxy_to.resource))) {
-					return router_error(chunk, "cancel", "item-not-found");
+					return router_error(chunk, &error_definitions[ERROR_PARTICIPANT_NOT_IN_ROOM]);
 				}
 
 				if (sender->role == ROLE_VISITOR && (room->flags & MUC_FLAG_VISITORSPM) == MUC_FLAG_VISITORSPM) {
-					return router_error(chunk, "cancel", "forbidden");
+					return router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PM]);
 				}
 
 				LDEBUG("sending private message to '%.*s', real JID '%.*s'",
@@ -317,7 +369,7 @@ int room_route(Room *room, RouterChunk *chunk) {
 				routed_receivers += send_to_participants(&output, &chunk->send, receiver, 1);
 			} else {
 				if (sender->role < ROLE_PARTICIPANT) {
-					return router_error(chunk, "cancel", "forbidden");
+					return router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PUBLIC]);
 				}
 
 				router_cleanup(packet);
@@ -337,7 +389,7 @@ int room_route(Room *room, RouterChunk *chunk) {
 				}
 
 				if (room_participant_by_nick(room, &packet->proxy_to.resource)) {
-					return router_error(chunk, "modify", "conflict");
+					return router_error(chunk, &error_definitions[ERROR_OCCUPANT_CONFLICT]);
 				}
 
 				// TODO(artem): check global registered nickname
@@ -348,15 +400,16 @@ int room_route(Room *room, RouterChunk *chunk) {
 					affiliation = AFFIL_OWNER;
 				} else {
 					if (room->participants_count >= room->max_participants) {
-						return router_error(chunk, "cancel", "forbidden");
+						return router_error(chunk, &error_definitions[ERROR_OCCUPANTS_LIMIT]);
 					}
 					affiliation = room_get_affiliation(room, &packet->real_from);
 					if (affiliation < AFFIL_NONE) {
-						return router_error(chunk, "cancel", "forbidden");
+						// TODO(artem): show the reason of being banned?
+						return router_error(chunk, &error_definitions[ERROR_BANNED]);
 					}
 					if ((room->flags & MUC_FLAG_MEMBERSONLY) == MUC_FLAG_MEMBERSONLY &&
 							affiliation < AFFIL_MEMBER) {
-						return router_error(chunk, "cancel", "forbidden");
+						return router_error(chunk, &error_definitions[ERROR_MEMBERS_ONLY]);
 					}
 				}
 				receiver = room_join(room, &packet->real_from, &packet->proxy_to.resource, affiliation);

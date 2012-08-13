@@ -5,6 +5,22 @@
 
 #include "rooms.h"
 
+static XMPPError error_definitions[] = {
+	{
+#define ERROR_ROOM_NOT_FOUND 0
+		.code = "405",
+		.name = "item-not-found",
+		.type = "cancel",
+		.text = "Room does not exist"
+	}, {
+#define ERROR_ROOM_CREATE_PERMISSION 1
+		.code = "403",
+		.name = "forbidden",
+		.type = "cancel",
+		.text = "Room creation is denied by service policy"
+	}
+};
+
 void rooms_init(Rooms *rooms) {
 	rooms->start = rooms->end = 0;
 	rooms->count = 0;
@@ -70,12 +86,12 @@ int rooms_route(RouterChunk *chunk) {
 	if (!(room = rooms_find(rooms, &chunk->packet.proxy_to))) {
 		if (packet->name != 'p' || packet->type == 'u') {
 			// this is not a presence, or presence type is 'unavailable'
-			return router_error(chunk, "cancel", "item-not-found");
+			return router_error(chunk, &error_definitions[ERROR_ROOM_NOT_FOUND]);
 		} else {
 			if ((acl_role(chunk->acl, &chunk->packet.real_from) & ACL_MUC_CREATE) == ACL_MUC_CREATE) {
 				room = rooms_create(rooms, &chunk->packet.proxy_to);
 			} else {
-				return router_error(chunk, "cancel", "forbidden");
+				return router_error(chunk, &error_definitions[ERROR_ROOM_CREATE_PERMISSION]);
 			}
 		}
 	}

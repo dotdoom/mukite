@@ -37,6 +37,13 @@ typedef struct RouterChunk {
 
 int router_process(RouterChunk *);
 void router_cleanup(IncomingPacket *);
-int router_error(RouterChunk *, char *error_type, char *error_name);
+
+typedef struct {
+	char code[4];
+	char type[10];
+	char name[20];
+	char text[200];
+} XMPPError;
+int router_error(RouterChunk *, XMPPError *);
 
 #endif
