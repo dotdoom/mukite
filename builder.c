@@ -69,8 +69,12 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 		BUF_PUSH_LITERAL("' jid='");
 		BUF_PUSH(JID_STR(node->jid), JID_LEN(node->jid));
 	}
+	if (node->nick.data) {
+		BUF_PUSH_LITERAL("' nick='");
+		BUF_PUSH_BPT(node->nick);
+	}
 
-	for (i = 0; i < MAX_STATUS_CODES && (code = node->status_codes[i]); ++i) {
+	for (i = 0; i < node->status_codes_count && (code = node->status_codes[i]); ++i) {
 		BUF_PUSH_LITERAL("'/><status code='");
 		code_str[2] = code % 10 + '0';
 		code /= 10;

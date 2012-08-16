@@ -102,7 +102,7 @@ ParticipantEntry *room_participant_by_nick(Room *room, BufferPtr *nick);
 ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid);
 
 typedef struct RouterChunk RouterChunk;
-int room_route(Room *, RouterChunk *);
+void room_route(Room *, RouterChunk *);
 
 BOOL room_serialize(Room *, FILE *);
 BOOL room_deserialize(Room *, FILE *);

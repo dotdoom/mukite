@@ -28,11 +28,10 @@ void router_cleanup(IncomingPacket *packet) {
 	}
 }
 
-int component_handle(RouterChunk *chunk) {
-	return 0;
+void component_handle(RouterChunk *chunk) {
 }
 
-int router_process(RouterChunk *chunk) {
+void router_process(RouterChunk *chunk) {
 	IncomingPacket *input = &chunk->input;
 	BuilderPacket *output = &chunk->output;
 
@@ -54,23 +53,21 @@ int router_process(RouterChunk *chunk) {
 			BPT_SIZE(&input->inner), input->inner.data);
 
 	if (BPT_SIZE(&input->proxy_to.node)) {
-		return rooms_route(chunk);
+		rooms_route(chunk);
 	} else {
-		return component_handle(chunk);
+		component_handle(chunk);
 	}
 }
 
-int router_error(RouterChunk *chunk, XMPPError *error) {
-	BOOL sent;
+void router_error(RouterChunk *chunk, XMPPError *error) {
 	BuilderPacket *output = &chunk->output;
 
-	jid_cpy(&output->to, &chunk->input.real_from);
+	jid_cpy(&output->to, &chunk->input.real_from, JID_FULL);
 	router_cleanup(&chunk->input);
 	output->from_nick.data = 0;
 	output->type = 'e';
 	output->error = error;
 	output->user_data = chunk->input.inner;
-	sent = chunk->send.proc(chunk->send.data);
+	chunk->send.proc(chunk->send.data);
 	jid_free(&output->to);
-	return sent ? 1 : 0;
 }

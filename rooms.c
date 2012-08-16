@@ -77,29 +77,28 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
 	return TRUE;
 }
 
-int rooms_route(RouterChunk *chunk) {
+void rooms_route(RouterChunk *chunk) {
 	Room *room = 0;
 	Rooms *rooms = chunk->rooms;
 	IncomingPacket *input = &chunk->input;
-	int routed = 0;
 
 	if (!(room = rooms_find(rooms, &input->proxy_to))) {
 		if (input->name != 'p' || input->type == 'u') {
 			// this is not a presence, or presence type is 'unavailable'
-			return router_error(chunk, &error_definitions[ERROR_ROOM_NOT_FOUND]);
+			router_error(chunk, &error_definitions[ERROR_ROOM_NOT_FOUND]);
+			return;
 		} else {
 			if ((acl_role(chunk->acl, &input->real_from) & ACL_MUC_CREATE) == ACL_MUC_CREATE) {
 				room = rooms_create(rooms, &input->proxy_to);
 			} else {
-				return router_error(chunk, &error_definitions[ERROR_ROOM_CREATE_PERMISSION]);
+				router_error(chunk, &error_definitions[ERROR_ROOM_CREATE_PERMISSION]);
+				return;
 			}
 		}
 	}
 
 	rooms_acquire(room);
-	routed = room_route(room, chunk);
+	room_route(room, chunk);
 	// TODO(artem); if (!room->participants && !(room->flags & MUC_FLAG_PERSISTENTROOM)) then remove the room
 	rooms_release(room);
-
-	return routed;
 }

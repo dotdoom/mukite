@@ -36,8 +36,8 @@ typedef struct RouterChunk {
 	BuilderPacket output;
 } RouterChunk;
 
-int router_process(RouterChunk *);
+void router_process(RouterChunk *);
 void router_cleanup(IncomingPacket *);
-int router_error(RouterChunk *, XMPPError *);
+void router_error(RouterChunk *, XMPPError *);
 
 #endif

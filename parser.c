@@ -171,7 +171,6 @@ void *parser_thread_entry(void *void_parser_config) {
 	StanzaEntry *stanza_entry;
 	BufferPtr stanza_entry_buffer;
 	LocalBufferStorage lbs;
-	int receivers;
 	RouterChunk router_chunk;
 
 	router_chunk.send.proc = send_packet;
@@ -203,8 +202,7 @@ void *parser_thread_entry(void *void_parser_config) {
 
 			if (parse_incoming_packet(&stanza_entry_buffer, &router_chunk.input)) {
 				lbs.buffer.data_end = lbs.buffer.data;
-				receivers = router_process(&router_chunk);
-				LDEBUG("forwarded to %d JIDs", receivers);
+				router_process(&router_chunk);
 			}
 		}
 

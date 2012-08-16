@@ -18,9 +18,10 @@ typedef struct {
 
 BOOL jid_struct(BufferPtr *jid_string, Jid *jid_struct);
 
+// When using NULLWC mode, jid1 can contain NULL for node/resource to indicate 'wildcard'
 int jid_cmp(Jid *jid1, Jid *jid2, int mode);
 int jid_strcmp(Jid *jid, Buffer *str, int part);
-void jid_cpy(Jid *dst, Jid *src);
+void jid_cpy(Jid *dst, Jid *src, int part);
 void jid_free(Jid *jid);
 
 BOOL jid_serialize(Jid *, FILE *);

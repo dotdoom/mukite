@@ -151,23 +151,45 @@ int jid_strcmp(Jid *jid, Buffer *str, int part) {
 	}
 }
 
-void jid_cpy(Jid *dst, Jid *src) {
-	// XXX: this should check each part
+void jid_cpy(Jid *dst, Jid *src, int part) {
+	int size = 0, node_size, host_size, resource_size;
+	char *mem = 0;
 
-	int size = src->resource.end - src->node.data;
-	dst->node.data = malloc(size);
-	dst->resource.end = dst->node.data + size;
-	memcpy(dst->node.data, src->node.data, size);
+	// Assume it's nonsence to have a copy of jid w/o hostname
 
-	dst->node.end = dst->node.data + BPT_SIZE(&src->node);
-	dst->host.data = dst->node.end + 1;
-	dst->host.end = dst->host.data + BPT_SIZE(&src->host);
-	dst->resource.data = dst->host.end + 1;
+	if (part & JID_NODE) {
+		size += (node_size = BPT_SIZE(&src->node)) + 1;
+	}
+	size += (host_size = BPT_SIZE(&src->host));
+	if (part & JID_RESOURCE) {
+		size += (resource_size = BPT_SIZE(&src->resource)) + 1;
+	}
 
-	LDEBUG("copied JID (%d bytes)\n"
+	mem = malloc(size);
+
+	memset(dst, 0, sizeof(*dst));
+	if (part & JID_NODE) {
+		dst->node.data = mem;
+		memcpy(dst->node.data, src->node.data, node_size);
+		dst->node.end = dst->node.data + node_size;
+		mem += node_size;
+		*(mem++) = '@';
+	}
+	dst->host.data = mem;
+	memcpy(dst->host.data, src->host.data, host_size);
+	dst->host.end = dst->host.data + host_size;
+	mem += host_size;
+	if (part & JID_RESOURCE) {
+		*(mem++) = '/';
+		dst->resource.data = mem;
+		memcpy(dst->resource.data, src->resource.data, resource_size);
+		dst->resource.end = dst->resource.data + resource_size;
+	}
+
+	LDEBUG("copied JID with mode %d (%d bytes)\n"
 			"from: '%.*s'\n"
 			"to:   '%.*s'",
-			size,
+			part, size,
 			JID_LEN(src), JID_STR(src),
 			JID_LEN(dst), JID_STR(dst));
 }

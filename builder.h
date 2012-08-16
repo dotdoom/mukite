@@ -8,6 +8,7 @@
 typedef struct {
 	int affiliation, role;
 	Jid *jid;
+	BufferPtr nick;
 	int status_codes[MAX_STATUS_CODES];
 	int status_codes_count;
 } MucAdmNode;
