@@ -58,6 +58,7 @@ typedef struct ParticipantEntry {
 	MUC_FLAG_PUBLICROOM | \
 	MUC_FLAG_PUBLICPARTICIPANTS | \
 	MUC_FLAG_IQ_PROXY | \
+	MUC_FLAG_SEMIANONYMOUS | \
 	MUC_FLAG_INVITES)
 
 typedef struct Room {

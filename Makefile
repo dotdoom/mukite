@@ -3,7 +3,6 @@ ifeq ($(REVISION),)
 	REVISION=0
 endif
 
-CC=gcc
 BARE_CFLAGS=-fPIC -g -Wall
 CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DVERSION=$(REVISION) -DLOG_PTHREAD -DLOG_CTIME
 LDFLAGS=-pthread
@@ -11,17 +10,7 @@ UNAME=$(shell uname)
 
 EXECUTABLE=mukite
 
-XMCOMP_OBJECTS=xmcomp/logger.o \
-	xmcomp/xmlfsm.o \
-	xmcomp/queue.o \
-	xmcomp/cbuffer.o \
-	xmcomp/sighelper.o \
-	xmcomp/network.o \
-	xmcomp/writer.o \
-	xmcomp/reader.o \
-	xmcomp/buffer.o \
-	xmcomp/sha1/sha1.o
-
+XMCOMP=xmcomp/xmcomp.o
 SOURCES=$(EXECUTABLE).c \
 	parser.c \
 	router.c \
@@ -38,12 +27,14 @@ all: $(EXECUTABLE)
 run: $(EXECUTABLE)
 	$(EXECUTABLE) config
 
-$(EXECUTABLE): $(OBJECTS) $(XMCOMP_OBJECTS)
+$(EXECUTABLE): $(OBJECTS) $(XMCOMP)
 
-$(XMCOMP_OBJECTS):
+$(XMCOMP):
 	cd xmcomp ; $(MAKE)
 
-clean:
-	cd xmcomp ; $(MAKE) clean
+clean_mukite:
 	rm -f $(OBJECTS)
 	rm -f $(EXECUTABLE)
+
+clean: clean_mukite
+	cd xmcomp ; $(MAKE) clean

@@ -80,16 +80,16 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
 int rooms_route(RouterChunk *chunk) {
 	Room *room = 0;
 	Rooms *rooms = chunk->rooms;
-	IncomingPacket *packet = &chunk->packet;
+	IncomingPacket *input = &chunk->input;
 	int routed = 0;
 
-	if (!(room = rooms_find(rooms, &chunk->packet.proxy_to))) {
-		if (packet->name != 'p' || packet->type == 'u') {
+	if (!(room = rooms_find(rooms, &input->proxy_to))) {
+		if (input->name != 'p' || input->type == 'u') {
 			// this is not a presence, or presence type is 'unavailable'
 			return router_error(chunk, &error_definitions[ERROR_ROOM_NOT_FOUND]);
 		} else {
-			if ((acl_role(chunk->acl, &chunk->packet.real_from) & ACL_MUC_CREATE) == ACL_MUC_CREATE) {
-				room = rooms_create(rooms, &chunk->packet.proxy_to);
+			if ((acl_role(chunk->acl, &input->real_from) & ACL_MUC_CREATE) == ACL_MUC_CREATE) {
+				room = rooms_create(rooms, &input->proxy_to);
 			} else {
 				return router_error(chunk, &error_definitions[ERROR_ROOM_CREATE_PERMISSION]);
 			}

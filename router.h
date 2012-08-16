@@ -20,7 +20,7 @@ typedef struct {
 	BufferPtr erase[MAX_ERASE_CHUNKS];
 } IncomingPacket;
 
-typedef BOOL(*SendProc)(void *, BuilderPacket *);
+typedef BOOL(*SendProc)(void *);
 
 typedef struct {
 	SendProc proc;
@@ -28,22 +28,16 @@ typedef struct {
 } SendCallback;
 
 typedef struct RouterChunk {
-	IncomingPacket packet;
+	IncomingPacket input;
 	SendCallback send;
 	Buffer hostname;
 	Rooms *rooms;
 	ACLConfig *acl;
+	BuilderPacket output;
 } RouterChunk;
 
 int router_process(RouterChunk *);
 void router_cleanup(IncomingPacket *);
-
-typedef struct {
-	char code[4];
-	char type[10];
-	char name[20];
-	char text[200];
-} XMPPError;
 int router_error(RouterChunk *, XMPPError *);
 
 #endif

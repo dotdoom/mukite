@@ -69,7 +69,6 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 		LWARN("dropping: stanza name parsing failure");
 		return FALSE;
 	}
-	LDEBUG("got stanza name '%.*s'", stanza_name.size, stanza_name.data);
 	if (
 			!B_EQ_LIT("message", &stanza_name) &&
 			!B_EQ_LIT("presence", &stanza_name) &&
@@ -83,9 +82,6 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 	// Parse attrs
 	while ((retval = xmlfsm_get_attr(buffer, &attr)) == XMLPARSE_SUCCESS) {
 		packet->header.end = buffer->data;
-		LDEBUG("got attr '%.*s'='%.*s'",
-				BPT_SIZE(&attr.name), attr.name.data,
-				BPT_SIZE(&attr.value), attr.value.data);
 		erase = 1;
 		if (BPT_EQ_LIT("from", &attr.name)) {
 			if (!jid_struct(&attr.value, &packet->real_from)) {
@@ -128,6 +124,12 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 		LDEBUG("dropping: wrong message type");
 		return FALSE;
 	}
+	if ((packet->name == 'm' || packet->name == 'p') &&
+			!packet->proxy_to.node.data) {
+		// Messages and presences MUST contain room node name
+		LDEBUG("dropping: message/presence without node name");
+		return FALSE;
+	}
 
 	// Set inner data
 	if (retval == XMLNODE_EMPTY) {
@@ -144,12 +146,13 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 typedef struct {
 	BuilderBuffer buffer;
 	CBuffer *cbuffer;
+	BuilderPacket *packet;
 } LocalBufferStorage;
 
-BOOL send_packet(void *void_local_buffer_storage, BuilderPacket *packet) {
+BOOL send_packet(void *void_local_buffer_storage) {
 	LocalBufferStorage *lbs = (LocalBufferStorage *)void_local_buffer_storage;
 	lbs->buffer.data_end = lbs->buffer.data;
-	if (build_packet(packet, &lbs->buffer)) {
+	if (builder_build(lbs->packet, &lbs->buffer)) {
 		cbuffer_write(lbs->cbuffer, lbs->buffer.data, lbs->buffer.data_end - lbs->buffer.data);
 		return TRUE;
 	} else {
@@ -171,16 +174,17 @@ void *parser_thread_entry(void *void_parser_config) {
 	int receivers;
 	RouterChunk router_chunk;
 
-	lbs.buffer.data = malloc(allocated_buffer_size);
-	lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
-	lbs.cbuffer = &config->writer_thread.cbuffer;
-
 	router_chunk.send.proc = send_packet;
 	router_chunk.send.data = &lbs;
 	router_chunk.rooms = &config->rooms;
 	router_chunk.acl = &config->acl_config;
 	router_chunk.hostname.data = config->component.hostname;
 	router_chunk.hostname.size = strlen(config->component.hostname);
+
+	lbs.buffer.data = malloc(allocated_buffer_size);
+	lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
+	lbs.cbuffer = &config->writer_thread.cbuffer;
+	lbs.packet = &router_chunk.output;
 
 	LINFO("started");
 	sighelper_sigblockall();
@@ -197,7 +201,7 @@ void *parser_thread_entry(void *void_parser_config) {
 			stanza_entry_buffer.data = stanza_entry->buffer;
 			stanza_entry_buffer.end = stanza_entry->buffer + stanza_entry->data_size;
 
-			if (parse_incoming_packet(&stanza_entry_buffer, &router_chunk.packet)) {
+			if (parse_incoming_packet(&stanza_entry_buffer, &router_chunk.input)) {
 				lbs.buffer.data_end = lbs.buffer.data;
 				receivers = router_process(&router_chunk);
 				LDEBUG("forwarded to %d JIDs", receivers);

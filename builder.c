@@ -19,6 +19,9 @@
 #define BUF_PUSH_BUF(bptr) \
 	BUF_PUSH(bptr.data, bptr.size)
 
+#define BUF_PUSH_STR(str) \
+	BUF_PUSH((str), strlen(str))
+
 #define BUF_PUSH_BPT(bptr) \
 	BUF_PUSH(bptr.data, BPT_SIZE(&bptr))
 
@@ -54,7 +57,7 @@ static const int role_sizes[] = {
 	9
 };
 
-int build_mucadm_node(MucAdmNode *node, BuilderBuffer *buffer) {
+BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 	int i, code, chunk_size;
 	char code_str[3];
 
@@ -69,11 +72,11 @@ int build_mucadm_node(MucAdmNode *node, BuilderBuffer *buffer) {
 
 	for (i = 0; i < MAX_STATUS_CODES && (code = node->status_codes[i]); ++i) {
 		BUF_PUSH_LITERAL("'/><status code='");
-		code -= (code_str[2] = code % 10);
-		code -= (code_str[1] = code % 100);
+		code_str[2] = code % 10 + '0';
+		code /= 10;
+		code_str[1] = code % 10 + '0';
+		code /= 10;
 		code_str[0] = code + '0';
-		code_str[1] += '0';
-		code_str[2] += '0';
 		BUF_PUSH(code_str, 3);
 	}
 
@@ -81,7 +84,23 @@ int build_mucadm_node(MucAdmNode *node, BuilderBuffer *buffer) {
 	return TRUE;
 }
 
-BOOL build_packet(BuilderPacket *packet, BuilderBuffer *buffer) {
+BOOL build_error(XMPPError *error, BuilderBuffer *buffer) {
+	int chunk_size;
+
+	BUF_PUSH_LITERAL("<error code='");
+	BUF_PUSH_STR(error->code);
+	BUF_PUSH_LITERAL("' type='");
+	BUF_PUSH_STR(error->type);
+	BUF_PUSH_LITERAL("'><");
+	BUF_PUSH_STR(error->name);
+	BUF_PUSH_LITERAL(" xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/><text>");
+	BUF_PUSH_STR(error->text);
+	BUF_PUSH_LITERAL("</text></error>");
+
+	return TRUE;
+}
+
+BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 	int chunk_size;
 
 	LDEBUG("building packet: started");
@@ -131,18 +150,24 @@ BOOL build_packet(BuilderPacket *packet, BuilderBuffer *buffer) {
 
 	if (!packet->header.data &&
 			!packet->user_data.data &&
-			(packet->name == 'p' || !packet->system_data.data)) {
+			(packet->name == 'p'/* || !packet->system_data.data*/)) {
 		BUF_PUSH_LITERAL("'/>");
 	} else {
 		BUF_PUSH_LITERAL("'>");
 
 		BUF_PUSH_IFBPT(packet->user_data);
-		if (packet->name == 'p') {
-			if (!build_mucadm_node(&packet->participant, buffer)) {
+		if (packet->type == 'e') {
+			if (!build_error(packet->error, buffer)) {
 				return FALSE;
 			}
 		} else {
-			BUF_PUSH_IFBPT(packet->system_data);
+			if (packet->name == 'p') {
+				if (!build_presence_mucadm(&packet->participant, buffer)) {
+					return FALSE;
+				}
+			} else {
+				//BUF_PUSH_IFBPT(packet->system_data);
+			}
 		}
 		switch (packet->name) {
 			case 'm':
@@ -157,5 +182,13 @@ BOOL build_packet(BuilderPacket *packet, BuilderBuffer *buffer) {
 		}
 	}
 
+	return TRUE;
+}
+
+BOOL builder_push_status_code(MucAdmNode *participant, int code) {
+	if (participant->status_codes_count >= MAX_STATUS_CODES) {
+		return FALSE;
+	}
+	participant->status_codes[participant->status_codes_count++] = code;
 	return TRUE;
 }
