@@ -21,8 +21,8 @@ Room *rooms_find(Rooms *, Jid *);
 void rooms_acquire(Room *);
 void rooms_release(Room *);
 
-typedef struct RouterChunk RouterChunk;
-void rooms_route(RouterChunk *);
+struct RouterChunk;
+void rooms_route(struct RouterChunk *);
 
 BOOL rooms_serialize(Rooms *, FILE *);
 BOOL rooms_deserialize(Rooms *, FILE *, int);

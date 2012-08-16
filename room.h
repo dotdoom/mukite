@@ -101,8 +101,8 @@ void room_leave(Room *room, ParticipantEntry *participant);
 ParticipantEntry *room_participant_by_nick(Room *room, BufferPtr *nick);
 ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid);
 
-typedef struct RouterChunk RouterChunk;
-void room_route(Room *, RouterChunk *);
+struct RouterChunk;
+void room_route(Room *, struct RouterChunk *);
 
 BOOL room_serialize(Room *, FILE *);
 BOOL room_deserialize(Room *, FILE *);
