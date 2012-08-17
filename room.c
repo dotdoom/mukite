@@ -169,7 +169,7 @@ void room_leave(Room *room, ParticipantEntry *participant) {
 			room->node.size, room->node.data);
 	--room->participants_count;
 
-	jid_free(&participant->jid);
+	jid_destroy(&participant->jid);
 	if (participant->presence.data) {
 		free(participant->presence.data);
 	}
@@ -258,7 +258,7 @@ BOOL room_serialize(Room *room, FILE *output) {
 
 BOOL room_deserialize(Room *room, FILE *input) {
 	return
-		buffer_deserialize(&room->node, input, JID_PART_LIMIT) &&
+		buffer_deserialize(&room->node, input, MAX_JID_PART_SIZE) &&
 		buffer_deserialize(&room->title, input, USER_STRING_OPTION_LIMIT) &&
 		buffer_deserialize(&room->description, input, USER_STRING_OPTION_LIMIT) &&
 		buffer_deserialize(&room->subject, input, USER_STRING_OPTION_LIMIT) &&
@@ -437,12 +437,6 @@ void room_route(Room *room, RouterChunk *chunk) {
 					return;
 				}
 
-				if (!input->proxy_to.resource.data) {
-					// Trying to join the room without presence
-					router_error(chunk, &error_definitions[ERROR_PARTICIPANT_NOT_IN_ROOM]);
-					return;
-				}
-
 				if (room_participant_by_nick(room, &input->proxy_to.resource)) {
 					router_error(chunk, &error_definitions[ERROR_OCCUPANT_CONFLICT]);
 					return;
@@ -498,9 +492,7 @@ void room_route(Room *room, RouterChunk *chunk) {
 				}
 				sender = receiver;
 			} else {
-				// FIXME(artem): not check for resource, but check if resource is not the same
-				if (input->proxy_to.resource.data &&
-						(receiver = room_participant_by_nick(room, &input->proxy_to.resource)) != sender) {
+				if ((receiver = room_participant_by_nick(room, &input->proxy_to.resource)) != sender) {
 					if (receiver) {
 						router_error(chunk, &error_definitions[ERROR_OCCUPANT_CONFLICT]);
 						return;
@@ -513,6 +505,7 @@ void room_route(Room *room, RouterChunk *chunk) {
 
 					// TODO(artem): check globally registered nickname
 					// TODO(artem): optimization, when moving to a separate proc
+
 					output->from_nick = sender->nick;
 					output->participant.affiliation = sender->affiliation;
 					output->participant.role = sender->role;
@@ -531,7 +524,8 @@ void room_route(Room *room, RouterChunk *chunk) {
 					sender->nick.data = new_nick.data;
 					sender->nick.size = BPT_SIZE(&new_nick);
 					output->type = 0;
-					output->participant.nick.data = 0;
+					output->participant.nick.data =
+						output->participant.nick.end = 0;
 				} else {
 					router_cleanup(input);
 				}

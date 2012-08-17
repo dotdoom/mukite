@@ -17,6 +17,8 @@ typedef struct {
 	ACLEntry *first;
 } ACLConfig;
 
-int acl_role(ACLConfig *acl, Jid *);
+int acl_role(ACLConfig *, Jid *);
+BOOL acl_serialize(ACLConfig *, FILE *);
+BOOL acl_deserialize(ACLConfig *, FILE *, int);
 
 #endif

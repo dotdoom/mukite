@@ -5,8 +5,7 @@
 
 #include "config.h"
 
-#define ACTION_NONE
-#define ACTION_RESTART
+#define MAX_ACLS 10240
 
 #define READ_CONFIG(name, type, prefix) \
 	if (!strcmp(cfg_opt_name, #name)) { \
@@ -94,6 +93,9 @@ void config_init(Config *config, char *filename) {
 void config_apply(Config *config) {
 	int i;
 	ParserConfig *parser = 0;
+	FILE *acl_data_file = 0;
+
+	LDEBUG("applying configuration settings");
 
 	log_level = config->logger.level;
 
@@ -108,6 +110,13 @@ void config_apply(Config *config) {
 		LERROR("%d exceeds parsers limit %d, shrinking",
 				config->parser.threads, PARSERS_COUNT_LIMIT);
 		config->parser.threads = PARSERS_COUNT_LIMIT;
+	}
+
+	if (!(acl_data_file = fopen(config->acl.data_file, "r"))) {
+		LERROR("could not open acl data file '%s' for reading", config->acl.data_file);
+	} else {
+		acl_deserialize(&config->acl_config, acl_data_file, MAX_ACLS);
+		fclose(acl_data_file);
 	}
 
 	if (config->parser_threads_count < config->parser.threads) {

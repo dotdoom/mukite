@@ -16,7 +16,7 @@ component.hostname conference.localhost
 component.password secret
 
 ## Parser options.
-parser.data_file rooms.data
+parser.data_file rooms.dat
 parser.threads 7
 parser.buffer 1048576
 
@@ -47,6 +47,8 @@ writer.buffer 1048576
 ## Access Control List
 # Default role name
 acl.default_role 1
+# Data file
+acl.data_file acl.dat
 
 ## Logger config
 # Logging output filter. Log messages lower than this level will not be printed

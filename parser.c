@@ -118,17 +118,23 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 		LWARN("dropping: not routable");
 		return FALSE;
 	}
-	if (packet->name == 'm' &&
-			((packet->proxy_to.resource.data == 0) == (packet->type == 'c'))) {
-		// The nickname (resource) is specified and type is not c(hat) - thus g(roupchat)
-		LDEBUG("dropping: wrong message type");
-		return FALSE;
-	}
-	if ((packet->name == 'm' || packet->name == 'p') &&
-			!packet->proxy_to.node.data) {
-		// Messages and presences MUST contain room node name
-		LDEBUG("dropping: message/presence without node name");
-		return FALSE;
+	if (packet->name == 'm' || packet->name == 'p') {
+		if (!packet->proxy_to.node.data) {
+			// Messages and presences MUST contain room node name
+			LDEBUG("dropping: message/presence without node name");
+			return FALSE;
+		}
+		if (packet->type == 'p' && !packet->proxy_to.resource.data) {
+			// Presence should contain nickname as resource
+			LDEBUG("dropping: presence without nickname");
+			return FALSE;
+		}
+		if (packet->name == 'm' &&
+				((packet->proxy_to.resource.data == 0) == (packet->type == 'c'))) {
+			// The nickname (resource) is specified and type is not c(hat) - thus g(roupchat)
+			LDEBUG("dropping: wrong message type");
+			return FALSE;
+		}
 	}
 
 	// Set inner data

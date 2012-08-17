@@ -69,5 +69,5 @@ void router_error(RouterChunk *chunk, XMPPError *error) {
 	output->error = error;
 	output->user_data = chunk->input.inner;
 	chunk->send.proc(chunk->send.data);
-	jid_free(&output->to);
+	jid_destroy(&output->to);
 }

@@ -48,9 +48,9 @@ BOOL jid_struct(BufferPtr *jid_string, Jid *jid_struct) {
 	}
 
 	if (!jid_struct->host.data ||
-			(BPT_SIZE(&jid_struct->host) > JID_PART_LIMIT) ||
-			(BPT_SIZE(&jid_struct->node) > JID_PART_LIMIT) ||
-			(jid_struct->resource.data && BPT_SIZE(&jid_struct->resource) > JID_PART_LIMIT)) {
+			(BPT_SIZE(&jid_struct->host) > MAX_JID_PART_SIZE) ||
+			(BPT_SIZE(&jid_struct->node) > MAX_JID_PART_SIZE) ||
+			(jid_struct->resource.data && BPT_SIZE(&jid_struct->resource) > MAX_JID_PART_SIZE)) {
 		return FALSE;
 	}
 
@@ -151,24 +151,34 @@ int jid_strcmp(Jid *jid, Buffer *str, int part) {
 	}
 }
 
-void jid_cpy(Jid *dst, Jid *src, int part) {
+void jid_cpy(Jid *dst, Jid *src, int parts) {
 	int size = 0, node_size, host_size, resource_size;
 	char *mem = 0;
 
 	// Assume it's nonsence to have a copy of jid w/o hostname
 
-	if (part & JID_NODE) {
-		size += (node_size = BPT_SIZE(&src->node)) + 1;
+	if (parts & JID_NODE) {
+		if ((node_size = BPT_SIZE(&src->node))) {
+			size += node_size + 1;
+		} else {
+			// Source has no node, no reason to copy it
+			parts &= ~JID_NODE;
+		}
 	}
 	size += (host_size = BPT_SIZE(&src->host));
-	if (part & JID_RESOURCE) {
-		size += (resource_size = BPT_SIZE(&src->resource)) + 1;
+	if (parts & JID_RESOURCE) {
+		if ((resource_size = BPT_SIZE(&src->resource))) {
+			size += resource_size + 1;
+		} else {
+			// Source has no resource, no reason to copy it
+			parts &= ~JID_RESOURCE;
+		}
 	}
 
 	mem = malloc(size);
 
 	memset(dst, 0, sizeof(*dst));
-	if (part & JID_NODE) {
+	if (parts & JID_NODE) {
 		dst->node.data = mem;
 		memcpy(dst->node.data, src->node.data, node_size);
 		dst->node.end = dst->node.data + node_size;
@@ -179,7 +189,7 @@ void jid_cpy(Jid *dst, Jid *src, int part) {
 	memcpy(dst->host.data, src->host.data, host_size);
 	dst->host.end = dst->host.data + host_size;
 	mem += host_size;
-	if (part & JID_RESOURCE) {
+	if (parts & JID_RESOURCE) {
 		*(mem++) = '/';
 		dst->resource.data = mem;
 		memcpy(dst->resource.data, src->resource.data, resource_size);
@@ -189,12 +199,12 @@ void jid_cpy(Jid *dst, Jid *src, int part) {
 	LDEBUG("copied JID with mode %d (%d bytes)\n"
 			"from: '%.*s'\n"
 			"to:   '%.*s'",
-			part, size,
+			parts, size,
 			JID_LEN(src), JID_STR(src),
 			JID_LEN(dst), JID_STR(dst));
 }
 
-void jid_free(Jid *jid) {
+void jid_destroy(Jid *jid) {
 	free(JID_STR(jid));
 }
 
@@ -207,7 +217,7 @@ BOOL jid_serialize(Jid *jid, FILE *output) {
 
 BOOL jid_deserialize(Jid *jid, FILE *input) {
 	BufferPtr jid_buffer_ptr;
-	if (!buffer_ptr_deserialize(&jid_buffer_ptr, input, JID_LIMIT)) {
+	if (!buffer_ptr_deserialize(&jid_buffer_ptr, input, MAX_JID_SIZE)) {
 		return FALSE;
 	}
 	return jid_struct(&jid_buffer_ptr, jid);
