@@ -45,7 +45,7 @@ static XMPPError error_definitions[] = {
 		.code = "",
 		.name = "conflict",
 		.type = "modify",
-		.text = "This nickname is already used by another occupant"
+		.text = "This nickname is already in use by another occupant"
 	}, {
 #define ERROR_OCCUPANTS_LIMIT 5
 		.code = "",
@@ -167,6 +167,7 @@ void room_leave(Room *room, ParticipantEntry *participant) {
 			room->participants_count, participant->nick.size, participant->nick.data,
 			JID_LEN(&participant->jid), JID_STR(&participant->jid),
 			room->node.size, room->node.data);
+	--room->participants_count;
 
 	jid_free(&participant->jid);
 	if (participant->presence.data) {
@@ -342,6 +343,32 @@ BOOL room_attach_config_status_codes(Room *room, MucAdmNode *participant) {
 	return TRUE;
 }
 
+BOOL room_broadcast_presence(Room *room, BuilderPacket *output, SendCallback *send, ParticipantEntry *sender) {
+	int orig_status_codes_count = output->participant.status_codes_count;
+	ParticipantEntry *receiver = room->participants;
+
+	for (; receiver; receiver = receiver->next) {
+		if (receiver == sender) {
+			if (!room_attach_config_status_codes(room, &output->participant)) {
+				LERROR("[BUG] unexpected status codes buffer overflow when trying to push room config");
+				return FALSE;
+			}
+			builder_push_status_code(&output->participant, STATUS_SELF_PRESENCE);
+		} else {
+			output->participant.status_codes_count = orig_status_codes_count;
+		}
+		output->to = receiver->jid;
+		if (receiver->role == ROLE_MODERATOR ||
+				(room->flags & MUC_FLAG_SEMIANONYMOUS) != MUC_FLAG_SEMIANONYMOUS) {
+			output->participant.jid = &sender->jid;
+		} else {
+			output->participant.jid = 0;
+		}
+		send->proc(send->data);
+	}
+	return TRUE;
+}
+
 void room_route(Room *room, RouterChunk *chunk) {
 	ParticipantEntry *sender = 0, *receiver = 0;
 	IncomingPacket *input = &chunk->input;
@@ -471,16 +498,16 @@ void room_route(Room *room, RouterChunk *chunk) {
 				}
 				sender = receiver;
 			} else {
-				if (input->proxy_to.resource.data) {
-					if (input->type == 'u') {
-						// TODO(artem): check how ejabberd handles this
+				// FIXME(artem): not check for resource, but check if resource is not the same
+				if (input->proxy_to.resource.data &&
+						(receiver = room_participant_by_nick(room, &input->proxy_to.resource)) != sender) {
+					if (receiver) {
+						router_error(chunk, &error_definitions[ERROR_OCCUPANT_CONFLICT]);
 						return;
 					}
 
-					// Participant wants to change a nickname
-
-					if (room_participant_by_nick(room, &input->proxy_to.resource)) {
-						router_error(chunk, &error_definitions[ERROR_OCCUPANT_CONFLICT]);
+					if (input->type == 'u') {
+						// TODO(artem): check how ejabberd handles this
 						return;
 					}
 
@@ -498,27 +525,7 @@ void room_route(Room *room, RouterChunk *chunk) {
 					builder_push_status_code(&output->participant, STATUS_NICKNAME_CHANGED);
 					router_cleanup(input);
 
-					// TODO(artem): move to separate proc (see below)
-					for (receiver = room->participants; receiver; receiver = receiver->next) {
-						if (sender == receiver) {
-							if (!room_attach_config_status_codes(room, &output->participant)) {
-								LERROR("[BUG] unexpected status codes buffer overflow when trying to push room config");
-								return;
-							}
-							builder_push_status_code(&output->participant, STATUS_SELF_PRESENCE);
-						} else {
-							// 1 to keep NICKNAME_CHANGED status
-							output->participant.status_codes_count = 1;
-						}
-						output->to = receiver->jid;
-						if (receiver->role == ROLE_MODERATOR ||
-								(room->flags & MUC_FLAG_SEMIANONYMOUS) != MUC_FLAG_SEMIANONYMOUS) {
-							output->participant.jid = &sender->jid;
-						} else {
-							output->participant.jid = 0;
-						}
-						send_to_participants(output, &chunk->send, receiver, 1);
-					}
+					room_broadcast_presence(room, output, &chunk->send, sender);
 
 					free(sender->nick.data);
 					sender->nick.data = new_nick.data;
@@ -537,25 +544,7 @@ void room_route(Room *room, RouterChunk *chunk) {
 			output->participant.role = sender->role;
 			output->from_nick = sender->nick;
 			output->user_data = input->inner;
-			for (receiver = room->participants; receiver; receiver = receiver->next) {
-				if (sender == receiver) {
-					if (!room_attach_config_status_codes(room, &output->participant)) {
-						LERROR("[BUG] unexpected status codes buffer overflow when trying to push room config");
-						return;
-					}
-					builder_push_status_code(&output->participant, STATUS_SELF_PRESENCE);
-				} else {
-					output->participant.status_codes_count = 0;
-				}
-				output->to = receiver->jid;
-				if (receiver->role == ROLE_MODERATOR ||
-						(room->flags & MUC_FLAG_SEMIANONYMOUS) != MUC_FLAG_SEMIANONYMOUS) {
-					output->participant.jid = &sender->jid;
-				} else {
-					output->participant.jid = 0;
-				}
-				send_to_participants(output, &chunk->send, receiver, 1);
-			}
+			room_broadcast_presence(room, output, &chunk->send, sender);
 
 			if (input->type == 'u') {
 				room_leave(room, sender);
