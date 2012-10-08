@@ -9,7 +9,15 @@ typedef struct {
 	char *data;
 	int size;
 } Buffer;
-#define B_EQ_LIT(literal, b) \
+#define BUF_INIT(b) { \
+		(b)->data = 0; \
+		(b)->size = 0; \
+	}
+#define BUF_END(b) \
+	((b)->data + (b)->size)
+#define BUF_EMPTY(b) \
+	(!(b)->data)
+#define BUF_EQ_LIT(literal, b) \
 	(sizeof(literal)-1 == (b)->size && \
 	 !memcmp((literal), (b)->data, sizeof(literal)-1))
 
@@ -19,11 +27,18 @@ BOOL buffer_deserialize(Buffer *, FILE *, int);
 typedef struct {
 	char *data, *end;
 } BufferPtr;
-#define BPT_SIZE(bptr) ((int)((bptr)->end - (bptr)->data))
+#define BPT_INIT(bptr) { \
+		(bptr)->data = 0; \
+		(bptr)->end = 0; \
+	}
+#define BPT_SIZE(bptr) \
+	((int)((bptr)->end - (bptr)->data))
+#define BPT_EMPTY(bptr) \
+	(!(b)->data)
 #define BPT_EQ_LIT(literal, bptr) \
 	(sizeof(literal)-1 == BPT_SIZE(bptr) && \
 	 !memcmp((literal), (bptr)->data, sizeof(literal)-1))
-#define BPT_2_B(bptr) \
+#define BPT_2_BUF(bptr) \
 	{ .data = (bptr)->data, .size = BPT_SIZE(bptr) }
 
 BOOL buffer_ptr_serialize(BufferPtr *, FILE *);

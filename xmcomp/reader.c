@@ -64,7 +64,7 @@ inline int get_continuous_block(BufferPtr *buffer, BufferPtr *data, char **conti
 	}
 
 	*continuous_buffer = data->end;
-	return data->data - data->end;
+	return BPT_SIZE(data);
 }
 
 void *reader_thread_entry(void *void_config) {

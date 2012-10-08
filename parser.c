@@ -70,9 +70,9 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 		return FALSE;
 	}
 	if (
-			!B_EQ_LIT("message", &stanza_name) &&
-			!B_EQ_LIT("presence", &stanza_name) &&
-			!B_EQ_LIT("iq", &stanza_name)) {
+			!BUF_EQ_LIT("message", &stanza_name) &&
+			!BUF_EQ_LIT("presence", &stanza_name) &&
+			!BUF_EQ_LIT("iq", &stanza_name)) {
 		LWARN("dropping: unknown stanza name '%.*s'", stanza_name.size, stanza_name.data);
 		return FALSE;
 	}

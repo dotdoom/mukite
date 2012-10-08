@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "buffer.h"
 
 BOOL buffer_serialize(Buffer *buffer, FILE *output) {
@@ -12,11 +14,16 @@ BOOL buffer_deserialize(Buffer *buffer, FILE *input, int limit) {
 	if (buffer->size < 0 || buffer->size > limit) {
 		return FALSE;
 	}
-	return (!buffer->size || fread(buffer->data, buffer->size, 1, input));
+	if (!buffer->size) {
+		buffer->data = 0;
+		return TRUE;
+	}
+	buffer->data = malloc(buffer->size);
+	return fread(buffer->data, buffer->size, 1, input);
 }
 
 BOOL buffer_ptr_serialize(BufferPtr *buffer_ptr, FILE *output) {
-	Buffer buffer = BPT_2_B(buffer_ptr);
+	Buffer buffer = BPT_2_BUF(buffer_ptr);
 	return buffer_serialize(&buffer, output);
 }
 
