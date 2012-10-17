@@ -218,7 +218,7 @@ ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid) {
 		return TRUE; \
 	}
 
-#define LIST_DESERIALIZER(name, Type, properties) \
+#define LIST_DESERIALIZER(name, Type, properties, backref) \
 	BOOL name ## _deserialize(Type **list, FILE *input, int limit) { \
 		Type *new_entry; \
 		if (!fread(list, sizeof(*list), 1, input)) { \
@@ -240,6 +240,7 @@ ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid) {
 			if (*list) { \
 				(*list)->next = new_entry; \
 			} \
+			backref; \
 			*list = new_entry; \
 		} while ((*list)->next); \
 		(*list)->next = 0; \
@@ -258,7 +259,8 @@ LIST_DESERIALIZER(participants, ParticipantEntry,
 	buffer_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE) &&
 	fread(&new_entry->affiliation, sizeof(new_entry->affiliation), 1, input) &&
 	fread(&new_entry->role, sizeof(new_entry->role), 1, input) &&
-	fread(&new_entry->next, sizeof(new_entry->next), 1, input))
+	fread(&new_entry->next, sizeof(new_entry->next), 1, input),
+	new_entry->prev = *list)
 
 LIST_SERIALIZER(affiliations, AffiliationEntry,
 	jid_serialize(&list->jid, output) &&
@@ -268,7 +270,7 @@ LIST_SERIALIZER(affiliations, AffiliationEntry,
 LIST_DESERIALIZER(affiliations, AffiliationEntry,
 	jid_deserialize(&new_entry->jid, input) &&
 	buffer_deserialize(&new_entry->reason, input, MAX_JID_PART_SIZE) &&
-	fread(&new_entry->next, sizeof(new_entry->next), 1, input))
+	fread(&new_entry->next, sizeof(new_entry->next), 1, input),)
 
 AffiliationEntry *affiliation_add(AffiliationEntry **list, Jid *jid, BufferPtr *reason) {
 	AffiliationEntry *affiliation = malloc(sizeof(*affiliation));
