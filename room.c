@@ -204,36 +204,92 @@ ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid) {
 	return 0;
 }
 
-BOOL participants_serialize(ParticipantEntry *list, FILE *output) {
-	for (; list; list = list->next) {
-		if (!jid_serialize(&list->jid, output) ||
-			!buffer_serialize(&list->nick, output) ||
-			!fwrite(&list->affiliation, sizeof(list->affiliation), 1, output) ||
-			!fwrite(&list->role, sizeof(list->role), 1, output) ||
-			!fwrite(&list->next, sizeof(list->next), 1, output)) {
-			return FALSE;
-		}
+#define LIST_SERIALIZER(name, Type, properties) \
+	BOOL name ## _serialize(Type *list, FILE *output) { \
+		/* First write a mark that the list exists */ \
+		if (!fwrite(&list, sizeof(list), 1, output)) { \
+			return FALSE; \
+		} \
+		for (; list; list = list->next) { \
+			if (!(properties)) { \
+				return FALSE; \
+			} \
+		} \
+		return TRUE; \
 	}
-	return TRUE;
-}
 
-BOOL participants_deserialize(ParticipantEntry **list, FILE *output, int limit) {
-	return TRUE;
-}
-
-BOOL affiliations_serialize(AffiliationEntry *list, FILE *output) {
-	for (; list; list = list->next) {
-		if (!jid_serialize(&list->jid, output) ||
-			!buffer_serialize(&list->reason, output) ||
-			!fwrite(&list->next, sizeof(list->next), 1, output)) {
-			return FALSE;
-		}
+#define LIST_DESERIALIZER(name, Type, properties) \
+	BOOL name ## _deserialize(Type **list, FILE *input, int limit) { \
+		Type *new_entry; \
+		if (!fread(list, sizeof(*list), 1, input)) { \
+			return FALSE; \
+		} \
+		if (!*list) { \
+			return TRUE; \
+		} \
+		*list = 0; \
+		int entry_count = 0; \
+		do { \
+			if (++entry_count > limit) { \
+				return FALSE; \
+			} \
+			new_entry = malloc(sizeof(*new_entry)); \
+			if (!(properties)) { \
+				return FALSE; \
+			} \
+			if (*list) { \
+				(*list)->next = new_entry; \
+			} \
+			*list = new_entry; \
+		} while ((*list)->next); \
+		(*list)->next = 0; \
+		return TRUE; \
 	}
-	return TRUE;
-}
 
-BOOL affiliations_deserialize(AffiliationEntry **list, FILE *input, int limit) {
-	return TRUE;
+LIST_SERIALIZER(participants, ParticipantEntry,
+	jid_serialize(&list->jid, output) &&
+	buffer_serialize(&list->nick, output) &&
+	fwrite(&list->affiliation, sizeof(list->affiliation), 1, output) &&
+	fwrite(&list->role, sizeof(list->role), 1, output) &&
+	fwrite(&list->next, sizeof(list->next), 1, output))
+
+LIST_DESERIALIZER(participants, ParticipantEntry,
+	jid_deserialize(&new_entry->jid, input) &&
+	buffer_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE) &&
+	fread(&new_entry->affiliation, sizeof(new_entry->affiliation), 1, input) &&
+	fread(&new_entry->role, sizeof(new_entry->role), 1, input) &&
+	fread(&new_entry->next, sizeof(new_entry->next), 1, input))
+
+LIST_SERIALIZER(affiliations, AffiliationEntry,
+	jid_serialize(&list->jid, output) &&
+	buffer_serialize(&list->reason, output) &&
+	fwrite(&list->next, sizeof(list->next), 1, output))
+
+LIST_DESERIALIZER(affiliations, AffiliationEntry,
+	jid_deserialize(&new_entry->jid, input) &&
+	buffer_deserialize(&new_entry->reason, input, MAX_JID_PART_SIZE) &&
+	fread(&new_entry->next, sizeof(new_entry->next), 1, input))
+
+AffiliationEntry *affiliation_add(AffiliationEntry **list, Jid *jid, BufferPtr *reason) {
+	AffiliationEntry *affiliation = malloc(sizeof(*affiliation));
+
+	jid_cpy(&affiliation->jid, jid, JID_NODE | JID_HOST);
+
+	affiliation->reason.size = BPT_SIZE(reason);
+	affiliation->reason.data = malloc(affiliation->reason.size);
+	memcpy(affiliation->reason.data, reason->data, affiliation->reason.size);
+	affiliation->next = 0;
+
+	if (*list) {
+		(*list)->next = affiliation;
+	}
+	*list = affiliation;
+
+	LDEBUG("set affiliation of '%.*s' (reason '%.*s')",
+			JID_LEN(jid), JID_STR(jid),
+			BPT_SIZE(reason), reason->data);
+
+	return affiliation;	
 }
 
 BOOL room_serialize(Room *room, FILE *output) {
@@ -552,6 +608,35 @@ void room_route(Room *room, RouterChunk *chunk) {
 				sender->presence.end = sender->presence.data + BPT_SIZE(&input->inner);
 				memcpy(sender->presence.data, input->inner.data, BPT_SIZE(&input->inner));
 			}
+
+			break;
+		case 'i':
+			if (!sender) {
+				// TODO: iq:disco, iq:info etc
+				return;
+			}
+
+
+			
+			output->type = 'r';
+			jid_cpy(&output->to, &chunk->input.real_from, JID_FULL);
+
+			jid_destroy(&output->to);
+
+/*
+<iq from="chat@comicslate.org" type="result" to="dot@sys/Laptop" id="aad3a">
+<query xmlns="http://jabber.org/protocol/disco#items">
+<item name="artem" jid="chat@comicslate.org/artem"/>
+<item name="Danaor" jid="chat@comicslate.org/Danaor"/>
+<item name="d1" jid="chat@comicslate.org/d1"/>
+<item name="Робот Спайк" jid="chat@comicslate.org/Робот Спайк"/>
+<item name="pacify`home" jid="chat@comicslate.org/pacify`home"/>
+<item name="KALDYH" jid="chat@comicslate.org/KALDYH"/>
+<item name="Mityai" jid="chat@comicslate.org/Mityai"/>
+<item name="artem" jid="chat@comicslate.org/artem"/>
+</query>
+</iq>
+*/
 
 			break;
 	}
