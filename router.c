@@ -21,6 +21,45 @@
 	"<feature var='jabber:iq:version'/>"
 
 void router_cleanup(IncomingPacket *packet) {
+/*
+ * ----11111-----3333-----222----
+ * ------444444444444444--------- ???
+ * (1) reordering
+ *
+ * 1<
+ * 2>
+ * 3>
+ *
+ * erase + move
+ *
+ * Move: data shift when larger indexes
+ *
+ *
+ *
+ */
+
+	/*int i, j, active_chunks = 0;
+	BufferPtr tmp;
+	for (; active_chunks < MAX_ERASE_CHUNKS && packet->erase[active_chunks].data;
+			++active_chunks)
+		;
+
+	for (i = 0; i < active_chunks-1; ++i) {
+		for (j = i+1; j < active_chunks; ++j) {
+			if (packet->erase[i].data < packet->erase[j].data) {
+				tmp = packet->erase[i];
+				packet->erase[i] = packet->erase[j];
+				packet->erase[j] = tmp;
+			}
+		}
+	}
+
+	for (i = 0; i < active_chunks; ++i) {
+
+	}*/
+	
+
+
 	int index;
 	for (index = 0; index < MAX_ERASE_CHUNKS && packet->erase[index].data; ++index) {
 		memset(packet->erase[index].data, ' ', BPT_SIZE(&packet->erase[index]));

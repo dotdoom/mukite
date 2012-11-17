@@ -192,7 +192,7 @@ void *parser_thread_entry(void *void_parser_config) {
 	lbs.packet = &router_chunk.output;
 
 	LINFO("started");
-	sighelper_sigblockall();
+	sighelper_sigblockall(0);
 
 	while (parser_config->enabled) {
 		if (allocated_buffer_size != config->parser.buffer) {

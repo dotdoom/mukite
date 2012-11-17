@@ -2,6 +2,7 @@
 
 #include "xmcomp/logger.h"
 #include "router.h"
+#include "serializer.h"
 
 #include "rooms.h"
 
@@ -88,20 +89,51 @@ Room *rooms_create(Rooms *rooms, Jid *jid) {
 	return room;
 }
 
+BOOL registered_nicks_serialize(RegisteredNick *list, FILE *output) {
+	LDEBUG("serializing registered nicks");
+	SERIALIZE_LIST(
+		jid_serialize(&list->jid, output) &&
+		buffer_serialize(&list->nick, output)
+	);
+}
+
+BOOL registered_nicks_deserialize(RegisteredNick **list, FILE *input, int limit) {
+	int entry_count = 0;
+	RegisteredNick *new_entry = 0;
+	LDEBUG("deserializing registered nicks");
+	DESERIALIZE_LIST(
+		jid_deserialize(&new_entry->jid, input) &&
+		buffer_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE),
+	);
+}
+
+BOOL rooms_serialize(Rooms *rooms, FILE *output) {
+	Room *list = rooms->start;
+	LDEBUG("serializing room list");
+	registered_nicks_serialize(rooms->registered_nicks, output);
+	SERIALIZE_LIST(
+		room_serialize(list, output)
+	)
+}
+
+BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
+	int entry_count = 0;
+	Room *new_entry = 0;
+	Room **list = &rooms->start;
+	LDEBUG("deserializing room list");
+	registered_nicks_deserialize(&rooms->registered_nicks, input, MAX_REGISTERED_NICKS);
+	DESERIALIZE_LIST(
+		room_deserialize(new_entry, input),
+		rooms->end = new_entry
+	)
+}
+
 void rooms_acquire(Room *room) {
 	pthread_mutex_lock(&room->sync);
 }
 
 void rooms_release(Room *room) {
 	pthread_mutex_unlock(&room->sync);
-}
-
-BOOL rooms_serialize(Rooms *rooms, FILE *output) {
-	return TRUE;
-}
-
-BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
-	return TRUE;
 }
 
 void rooms_route(RouterChunk *chunk) {

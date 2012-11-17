@@ -20,7 +20,6 @@ int acl_role(ACLConfig *acl, Jid *jid) {
 
 BOOL acl_serialize(ACLConfig *acl, FILE *output) {
 	ACLEntry *entry = acl->first;
-
 	for (; entry; entry = entry->next) {
 		if (fprintf(output, "%d %s\n", entry->role, JID_STR(&entry->jid)) <= 0) {
 			return FALSE;

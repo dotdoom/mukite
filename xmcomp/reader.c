@@ -67,6 +67,10 @@ inline int get_continuous_block(BufferPtr *buffer, BufferPtr *data, char **conti
 	return BPT_SIZE(data);
 }
 
+static void sigusr2_handler(int signal) {
+	// SIGUSR2 should only interrupt recv() - so do nothing
+}
+
 void *reader_thread_entry(void *void_config) {
 	ReaderConfig *config = (ReaderConfig *)void_config;
 	StanzaQueue *queue = &config->queue;
@@ -80,7 +84,8 @@ void *reader_thread_entry(void *void_config) {
 	char *current_stanza = 0, *continuous_block = 0;
 
 	LINFO("started");
-	sighelper_sigblockall();
+	sighelper_sigblockall(SIGUSR2);
+	sighelper_sigaction(SIGUSR2, sigusr2_handler);
 
 	network_buffer.data = malloc(network_buffer_size = queue->network_buffer_size);
 	network_buffer.end = network_buffer.data + network_buffer_size;
@@ -195,7 +200,7 @@ void *reader_thread_entry(void *void_config) {
 
 		current_stanza = network_data.data;
 	}
-	config->enabled = 0;
+	config->enabled = FALSE;
 
 	LINFO("terminated");
 	pthread_exit(0);

@@ -106,17 +106,17 @@ void config_apply(Config *config) {
 	config->acl_config.default_role =
 		config->acl.default_role;
 
-	if (config->parser.threads > PARSERS_COUNT_LIMIT) {
-		LERROR("%d exceeds parsers limit %d, shrinking",
-				config->parser.threads, PARSERS_COUNT_LIMIT);
-		config->parser.threads = PARSERS_COUNT_LIMIT;
-	}
-
 	if (!(acl_data_file = fopen(config->acl.data_file, "r"))) {
 		LERROR("could not open acl data file '%s' for reading", config->acl.data_file);
 	} else {
 		acl_deserialize(&config->acl_config, acl_data_file, MAX_ACLS);
 		fclose(acl_data_file);
+	}
+
+	if (config->parser.threads > PARSERS_COUNT_LIMIT) {
+		LERROR("%d exceeds parsers limit %d, shrinking",
+				config->parser.threads, PARSERS_COUNT_LIMIT);
+		config->parser.threads = PARSERS_COUNT_LIMIT;
 	}
 
 	if (config->parser_threads_count < config->parser.threads) {
@@ -129,8 +129,8 @@ void config_apply(Config *config) {
 		}
 	} else if (config->parser_threads_count > config->parser.threads) {
 		for (i = config->parser.threads; i < config->parser_threads_count; ++i) {
-			config->parser_threads[i].enabled = FALSE;
-			// TODO(artem): join parser thread
+			parser = &config->parser_threads[i];
+			parser->enabled = FALSE;
 			--config->parser_threads_count;
 		}
 	}

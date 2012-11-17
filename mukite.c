@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "xmcomp/network.h"
 #include "xmcomp/sighelper.h"
@@ -12,21 +13,54 @@
 #define APP_NAME "mukite"
 
 Config config;
+BOOL running = TRUE;
 
 static void reload_config(int signal) {
 	config_read(&config);
 	config_apply(&config);
 }
 
-static void dump_data(int signal) {
-	FILE *output = fopen(config.parser.data_file, "w");
-	rooms_serialize(&config.rooms, output);
-	fclose(output);
+static void save_data(int signal) {
+	int error;
+	FILE *output = 0;
+	LINFO("received signal %d, saving to the file: '%s'", signal, config.parser.data_file);
+	if ((output = fopen(config.parser.data_file, "w"))) {
+		if (!rooms_serialize(&config.rooms, output)) {
+			LERROR("serialization failure, probably disk error");
+		}
+		fclose(output);
+	} else {
+		error = errno;
+		LERRNO("failed to save data", error);
+	}
+}
+
+static void load_data() {
+	int error;
+	FILE *input = 0;
+	LINFO("loading from the file: '%s'", config.parser.data_file);
+	if ((input = fopen(config.parser.data_file, "r"))) {
+		if (!rooms_deserialize(&config.rooms, input, 100)) {
+			LERROR("deserialization failure, probably disk error/version mismatch");
+		}
+		fclose(input);
+	} else {
+		error = errno;
+		LERRNO("failed to load data", error);
+	}
 }
 
 static void terminate(int signal) {
-//	dump_data(signal);
-//	running = 0;
+	save_data(signal);
+	running = FALSE;
+
+	if (config.reader_thread.enabled) {
+		// SIGUSR2 the reader thread to interrupt the recv() call
+		config.reader_thread.enabled = FALSE;
+		pthread_kill(config.reader_thread_id, SIGUSR2);
+
+		// As soon as reader thread is terminated, main() terminates the writer thread and wraps up
+	}
 }
 
 int main(int argc, char **argv) {
@@ -42,12 +76,16 @@ int main(int argc, char **argv) {
 	if (!config_read(&config)) {
 		return 1;
 	}
-	
-	sighelper_sigaction(SIGHUP, reload_config);
-	sighelper_sigaction(SIGUSR1, dump_data);
-	sighelper_sigaction(SIGTERM, terminate);
 
-	while (1) {
+	load_data();
+
+	sighelper_sigaction(SIGHUP, reload_config);
+	sighelper_sigaction(SIGUSR1, save_data);
+	sighelper_sigaction(SIGTERM, terminate);
+	sighelper_sigaction(SIGQUIT, terminate);
+	sighelper_sigaction(SIGINT, terminate);
+
+	while (running) {
 		LINFO("connecting to %s:%d", config.network.host, config.network.port);
 
 		if (net_connect(&config.socket, config.network.host, config.network.port)) {
@@ -70,7 +108,7 @@ int main(int argc, char **argv) {
 		}
 		reconnect_delay = 1;
 
-		// Display component hostname is process list - user convenience
+		// Display component hostname in process list - user convenience
 		strcpy(argv[0], APP_NAME " ");
 		strncat(argv[0], config.component.hostname, CONFIG_OPTION_LENGTH);
 
@@ -95,7 +133,11 @@ int main(int argc, char **argv) {
 		LINFO("creating worker threads");
 		config_apply(&config);
 
-		LINFO("WAITING");
+		LINFO("started");
+		pthread_join(config.reader_thread_id, 0);
+		// Switch cbuffer to offline, indicating no more data is expected.
+		// As soon as the writer finishes the job, it will terminate
+		cbuffer_offline(&config.writer_thread.cbuffer);
 		pthread_join(config.writer_thread_id, 0);
 
 		LINFO("destroying buffers, queues and disconnecting");

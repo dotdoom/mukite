@@ -7,9 +7,18 @@
 #include "room.h"
 #include "jid.h"
 
+#define MAX_REGISTERED_NICKS 10240
+
+typedef struct RegisteredNick {
+	Jid jid;
+	Buffer nick;
+	struct RegisteredNick *next;
+} RegisteredNick;
+
 typedef struct {
 	int count;
 	Room *start, *end;
+	RegisteredNick *registered_nicks;
 	pthread_mutex_t sync;
 } Rooms;
 

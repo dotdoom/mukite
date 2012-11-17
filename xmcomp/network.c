@@ -222,35 +222,16 @@ BOOL net_unstream(Socket *sock) {
 }
 
 int net_recv(Socket *sock, char *buffer, int size) {
-/* Wait for "timeout" seconds for the socket to become readable
-readable_timeout(int sock, int timeout)
-{
-    struct timeval tv;
-    fd_set         rset;
-    int            isready;
-
-    FD_ZERO(&rset);
-    FD_SET(sock, &rset);
-
-    tv.tv_sec  = timeout;
-    tv.tv_usec = 0;
-
- again:
-    isready = select(sock+1, &rset, NULL, NULL, &tv);
-    if (isready < 0) {
-        if (errno == EINTR) goto again;
-        perror("select"); _exit(1);
-    }
-
-    return isready;
-}*/
-
 	int bytes_received, error;
 
 	LDEBUG("receiving %d bytes via %d", size, sock->socket);
 	VERIFY_CONNECTED(FALSE);
 
 	if ((bytes_received = recv(sock->socket, buffer, size, 0)) < 0) {
+		if (errno == EINTR) {
+			LWARN("received a signal when trying to read from network, assuming zero bytes read");
+			return 0;
+		}
 		error = errno;
 		LERRNO("failed to receive %d bytes from socket %d", error, size, sock->socket);
 		return -1;

@@ -2,10 +2,13 @@
 
 #include "sighelper.h"
 
-void sighelper_sigblockall() {
+void sighelper_sigblockall(int except_signal) {
 	sigset_t block_sigset;
 
 	sigfillset(&block_sigset);
+	if (except_signal) {
+		sigdelset(&block_sigset, except_signal);
+	}
 	pthread_sigmask(SIG_SETMASK, &block_sigset, 0);
 }
 

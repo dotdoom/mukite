@@ -5,7 +5,8 @@
 
 typedef void (*SigHandler)(int);
 
-void sighelper_sigblockall();
+// Block all signals; if parameter is not 0, do not block that signal
+void sighelper_sigblockall(int except_signal);
 void sighelper_sigaction(int, SigHandler);
 
 #endif

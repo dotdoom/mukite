@@ -17,6 +17,8 @@ void cbuffer_init(CBuffer *cbuffer, char *buffer, int size) {
 	pthread_mutex_init(&sync->cbuffer_mutex, 0);
 	pthread_cond_init(&sync->data_available_cv, 0);
 	pthread_cond_init(&sync->free_available_cv, 0);
+
+	cbuffer->online = TRUE;
 }
 
 void cbuffer_clear(CBuffer *cbuffer) {
@@ -64,12 +66,23 @@ inline void cbuffer_write(CBuffer *cbuffer, char *buffer, int size) {
 	pthread_mutex_unlock(&cbuffer->sync.cbuffer_mutex);
 }
 
+inline void cbuffer_offline(CBuffer *cbuffer) {
+	CBufferSync *sync = &cbuffer->sync;
+
+	cbuffer->online = FALSE;
+	// Also wakeup a waiting condvar for the case there's no data
+	pthread_cond_signal(&sync->data_available_cv);
+}
+
 inline int cbuffer_get_chunk(CBuffer *cbuffer) {
 	CBufferSync *sync = &cbuffer->sync;
 	CBufferStats *stats = &cbuffer->stats;
 	int end_buffer_delta;
 
 	while (!cbuffer->data_size) {
+		if (!cbuffer->online) {
+			return 0;
+		}
 		++stats->underflows;
 		pthread_mutex_lock(&sync->cbuffer_mutex);
 		pthread_cond_wait(&sync->data_available_cv, &sync->cbuffer_mutex);

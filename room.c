@@ -3,6 +3,7 @@
 
 #include "xmcomp/logger.h"
 #include "router.h"
+#include "serializer.h"
 
 #include "room.h"
 
@@ -125,8 +126,9 @@ int room_get_affiliation(Room *room, Jid *jid) {
 ParticipantEntry *room_join(Room *room, Jid *jid, BufferPtr *nick, int affiliation) {
 	ParticipantEntry *participant = malloc(sizeof(*participant));
 
-	LDEBUG("'%.*s' is joining the room as '%.*s'",
+	LDEBUG("'%.*s' is joining the room '%.*s' as '%.*s'",
 			JID_LEN(jid), JID_STR(jid),
+			room->node.size, room->node.data,
 			BPT_SIZE(nick), nick->data);
 
 	jid_cpy(&participant->jid, jid, JID_FULL);
@@ -204,73 +206,47 @@ ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid) {
 	return 0;
 }
 
-#define LIST_SERIALIZER(name, Type, properties) \
-	BOOL name ## _serialize(Type *list, FILE *output) { \
-		/* First write a mark that the list exists */ \
-		if (!fwrite(&list, sizeof(list), 1, output)) { \
-			return FALSE; \
-		} \
-		for (; list; list = list->next) { \
-			if (!(properties)) { \
-				return FALSE; \
-			} \
-		} \
-		return TRUE; \
-	}
+BOOL participants_serialize(ParticipantEntry *list, FILE *output) {
+	LDEBUG("serializing participant list");
+	SERIALIZE_LIST(
+		jid_serialize(&list->jid, output) &&
+		buffer_serialize(&list->nick, output) &&
+		SERIALIZE_BASE(list->affiliation) &&
+		SERIALIZE_BASE(list->role)
+	)
+}
 
-#define LIST_DESERIALIZER(name, Type, properties, backref) \
-	BOOL name ## _deserialize(Type **list, FILE *input, int limit) { \
-		Type *new_entry; \
-		if (!fread(list, sizeof(*list), 1, input)) { \
-			return FALSE; \
-		} \
-		if (!*list) { \
-			return TRUE; \
-		} \
-		*list = 0; \
-		int entry_count = 0; \
-		do { \
-			if (++entry_count > limit) { \
-				return FALSE; \
-			} \
-			new_entry = malloc(sizeof(*new_entry)); \
-			if (!(properties)) { \
-				return FALSE; \
-			} \
-			if (*list) { \
-				(*list)->next = new_entry; \
-			} \
-			backref; \
-			*list = new_entry; \
-		} while ((*list)->next); \
-		(*list)->next = 0; \
-		return TRUE; \
-	}
+BOOL participants_deserialize(ParticipantEntry **list, FILE *input, int limit) {
+	int entry_count = 0;
+	ParticipantEntry *new_entry = 0;
+	LDEBUG("deserializing participant list");
+	DESERIALIZE_LIST(
+		jid_deserialize(&new_entry->jid, input) &&
+		buffer_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE) &&
+		DESERIALIZE_BASE(new_entry->affiliation) &&
+		DESERIALIZE_BASE(new_entry->role),
 
-LIST_SERIALIZER(participants, ParticipantEntry,
-	jid_serialize(&list->jid, output) &&
-	buffer_serialize(&list->nick, output) &&
-	fwrite(&list->affiliation, sizeof(list->affiliation), 1, output) &&
-	fwrite(&list->role, sizeof(list->role), 1, output) &&
-	fwrite(&list->next, sizeof(list->next), 1, output))
+		new_entry->prev = *list
+	)
+}
 
-LIST_DESERIALIZER(participants, ParticipantEntry,
-	jid_deserialize(&new_entry->jid, input) &&
-	buffer_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE) &&
-	fread(&new_entry->affiliation, sizeof(new_entry->affiliation), 1, input) &&
-	fread(&new_entry->role, sizeof(new_entry->role), 1, input) &&
-	fread(&new_entry->next, sizeof(new_entry->next), 1, input),
-	new_entry->prev = *list)
+BOOL affiliations_serialize(AffiliationEntry *list, FILE *output) {
+	LDEBUG("serializing affiliations list");
+	SERIALIZE_LIST(
+		jid_serialize(&list->jid, output) &&
+		buffer_serialize(&list->reason, output)
+	)
+}
 
-LIST_SERIALIZER(affiliations, AffiliationEntry,
-	jid_serialize(&list->jid, output) &&
-	buffer_serialize(&list->reason, output) &&
-	fwrite(&list->next, sizeof(list->next), 1, output))
-
-LIST_DESERIALIZER(affiliations, AffiliationEntry,
-	jid_deserialize(&new_entry->jid, input) &&
-	buffer_deserialize(&new_entry->reason, input, MAX_JID_PART_SIZE) &&
-	fread(&new_entry->next, sizeof(new_entry->next), 1, input),)
+BOOL affiliations_deserialize(AffiliationEntry **list, FILE *input, int limit) {
+	int entry_count = 0;
+	AffiliationEntry *new_entry = 0;
+	LDEBUG("deserializing affiliations list");
+	DESERIALIZE_LIST(
+		jid_deserialize(&new_entry->jid, input) &&
+		buffer_deserialize(&new_entry->reason, input, MAX_JID_PART_SIZE),
+	)
+}
 
 AffiliationEntry *affiliation_add(AffiliationEntry **list, Jid *jid, BufferPtr *reason) {
 	AffiliationEntry *affiliation = malloc(sizeof(*affiliation));
@@ -295,6 +271,7 @@ AffiliationEntry *affiliation_add(AffiliationEntry **list, Jid *jid, BufferPtr *
 }
 
 BOOL room_serialize(Room *room, FILE *output) {
+	LDEBUG("serializing room '%.*s'", room->node.size, room->node.data);
 	return
 		buffer_serialize(&room->node, output) &&
 		buffer_serialize(&room->title, output) &&
@@ -302,10 +279,10 @@ BOOL room_serialize(Room *room, FILE *output) {
 		buffer_serialize(&room->subject, output) &&
 		buffer_serialize(&room->password, output) &&
 
-		fwrite(&room->flags, sizeof(room->flags), 1, output) &&
-		fwrite(&room->default_role, sizeof(room->default_role), 1, output) &&
-		fwrite(&room->max_participants, sizeof(room->max_participants), 1, output) &&
-		fwrite(&room->_unused, sizeof(room->_unused), 1, output) &&
+		SERIALIZE_BASE(room->flags) &&
+		SERIALIZE_BASE(room->default_role) &&
+		SERIALIZE_BASE(room->max_participants) &&
+		SERIALIZE_BASE(room->_unused) &&
 
 		participants_serialize(room->participants, output) &&
 		affiliations_serialize(room->owners, output) &&
@@ -315,6 +292,7 @@ BOOL room_serialize(Room *room, FILE *output) {
 }
 
 BOOL room_deserialize(Room *room, FILE *input) {
+	LDEBUG("deserializing room");
 	return
 		buffer_deserialize(&room->node, input, MAX_JID_PART_SIZE) &&
 		buffer_deserialize(&room->title, input, USER_STRING_OPTION_LIMIT) &&
@@ -322,10 +300,10 @@ BOOL room_deserialize(Room *room, FILE *input) {
 		buffer_deserialize(&room->subject, input, USER_STRING_OPTION_LIMIT) &&
 		buffer_deserialize(&room->password, input, USER_STRING_OPTION_LIMIT) &&
 
-		fread(&room->flags, sizeof(room->flags), 1, input) &&
-		fread(&room->default_role, sizeof(room->default_role), 1, input) &&
-		fread(&room->max_participants, sizeof(room->max_participants), 1, input) &&
-		fread(&room->_unused, sizeof(room->_unused), 1, input) &&
+		DESERIALIZE_BASE(room->flags) &&
+		DESERIALIZE_BASE(room->default_role) &&
+		DESERIALIZE_BASE(room->max_participants) &&
+		DESERIALIZE_BASE(room->_unused) &&
 
 		participants_deserialize(&room->participants, input, PARTICIPANTS_LIMIT) &&
 		affiliations_deserialize(&room->owners, input, AFFILIATION_LIST_LIMIT) &&
@@ -488,69 +466,10 @@ void room_route(Room *room, RouterChunk *chunk) {
 				return; // stanza is obviously not valid, just drop silently
 			}
 
-			if (!sender) {
-				// Participant not in room, but wants to join
-				if (input->type == 'u') {
-					// There's no use in 'unavailable' presence for the not-in-room user
-					return;
-				}
-
-				if (room_participant_by_nick(room, &input->proxy_to.resource)) {
-					router_error(chunk, &error_definitions[ERROR_OCCUPANT_CONFLICT]);
-					return;
-				}
-
-				// TODO(artem): check global registered nickname
-				// TODO(artem): check password
-				// TODO(artem): load room history as requested
-
-				if ((acl_role(chunk->acl, &input->real_from) & ACL_MUC_ADMIN) == ACL_MUC_ADMIN) {
-					affiliation = AFFIL_OWNER;
-				} else {
-					if (room->participants_count >= room->max_participants) {
-						router_error(chunk, &error_definitions[ERROR_OCCUPANTS_LIMIT]);
-						return;
-					}
-					if (!room->participants && (room->flags & MUC_FLAG_PERSISTENTROOM) != MUC_FLAG_PERSISTENTROOM) {
-						// This is empty non-persistent room => thus it was just created
-						affiliation_entry = malloc(sizeof(*affiliation_entry));
-						memset(affiliation_entry, 0, sizeof(*affiliation_entry));
-						jid_cpy(&affiliation_entry->jid, &input->real_from, JID_NODE | JID_HOST);
-						room->owners = affiliation_entry;
-					}
-					affiliation = room_get_affiliation(room, &input->real_from);
-					if (affiliation < AFFIL_NONE) {
-						// TODO(artem): show the reason of being banned?
-						router_error(chunk, &error_definitions[ERROR_BANNED]);
-						return;
-					}
-					if ((room->flags & MUC_FLAG_MEMBERSONLY) == MUC_FLAG_MEMBERSONLY &&
-							affiliation < AFFIL_MEMBER) {
-						router_error(chunk, &error_definitions[ERROR_MEMBERS_ONLY]);
-						return;
-					}
-				}
-
-				receiver = room_join(room, &input->real_from, &input->proxy_to.resource, affiliation);
-				router_cleanup(input);
-
-				// Skip first participant as we know this is the one who just joined
-				for (sender = room->participants->next; sender; sender = sender->next) {
-					output->from_nick = sender->nick;
-					output->participant.affiliation = sender->affiliation;
-					output->participant.role = sender->role;
-					output->user_data = sender->presence;
-					if (receiver->role == ROLE_MODERATOR ||
-							(room->flags & MUC_FLAG_SEMIANONYMOUS) != MUC_FLAG_SEMIANONYMOUS) {
-						output->participant.jid = &sender->jid;
-					} else {
-						output->participant.jid = 0;
-					}
-					send_to_participants(output, &chunk->send, receiver, 1);
-				}
-				sender = receiver;
-			} else {
+			if (sender) {
+				// Sender is already a participant
 				if ((receiver = room_participant_by_nick(room, &input->proxy_to.resource)) != sender) {
+					// Participant wants to change a nickname
 					if (receiver) {
 						router_error(chunk, &error_definitions[ERROR_OCCUPANT_CONFLICT]);
 						return;
@@ -589,6 +508,67 @@ void room_route(Room *room, RouterChunk *chunk) {
 				}
 
 				// TODO(artem): check if visitors can change status
+			} else {
+				// Participant not in room, but wants to join
+				if (input->type == 'u') {
+					// There's no use in 'unavailable' presence for the not-in-room user
+					return;
+				}
+
+				if (room_participant_by_nick(room, &input->proxy_to.resource)) {
+					router_error(chunk, &error_definitions[ERROR_OCCUPANT_CONFLICT]);
+					return;
+				}
+
+				// TODO(artem): check global registered nickname
+				// TODO(artem): check password
+				// TODO(artem): load room history as requested
+
+				if ((acl_role(chunk->acl, &input->real_from) & ACL_MUC_ADMIN) == ACL_MUC_ADMIN) {
+					affiliation = AFFIL_OWNER;
+				} else {
+					if (room->participants_count >= room->max_participants) {
+						router_error(chunk, &error_definitions[ERROR_OCCUPANTS_LIMIT]);
+						return;
+					}
+					if (!room->participants && (room->flags & MUC_FLAG_PERSISTENTROOM) != MUC_FLAG_PERSISTENTROOM) {
+						// This is empty non-persistent room => thus it has just been created
+						affiliation_entry = malloc(sizeof(*affiliation_entry));
+						memset(affiliation_entry, 0, sizeof(*affiliation_entry));
+						jid_cpy(&affiliation_entry->jid, &input->real_from, JID_NODE | JID_HOST);
+						room->owners = affiliation_entry;
+					}
+					affiliation = room_get_affiliation(room, &input->real_from);
+					if (affiliation < AFFIL_NONE) {
+						// TODO(artem): show the reason of being banned?
+						router_error(chunk, &error_definitions[ERROR_BANNED]);
+						return;
+					}
+					if ((room->flags & MUC_FLAG_MEMBERSONLY) == MUC_FLAG_MEMBERSONLY &&
+							affiliation < AFFIL_MEMBER) {
+						router_error(chunk, &error_definitions[ERROR_MEMBERS_ONLY]);
+						return;
+					}
+				}
+
+				receiver = room_join(room, &input->real_from, &input->proxy_to.resource, affiliation);
+				router_cleanup(input);
+
+				// Skip first participant as we know this is the one who just joined
+				for (sender = room->participants->next; sender; sender = sender->next) {
+					output->from_nick = sender->nick;
+					output->participant.affiliation = sender->affiliation;
+					output->participant.role = sender->role;
+					output->user_data = sender->presence;
+					if (receiver->role == ROLE_MODERATOR ||
+							(room->flags & MUC_FLAG_SEMIANONYMOUS) != MUC_FLAG_SEMIANONYMOUS) {
+						output->participant.jid = &sender->jid;
+					} else {
+						output->participant.jid = 0;
+					}
+					send_to_participants(output, &chunk->send, receiver, 1);
+				}
+				sender = receiver;
 			}
 
 			// Broadcast sender's presence to all participants
