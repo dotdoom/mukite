@@ -2,6 +2,7 @@
 #define XMCOMP_LOGGER_H
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifdef LOG_POS
 #	define LOG_POS_PRE

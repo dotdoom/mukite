@@ -19,9 +19,9 @@
 static XMPPError error_definitions[] = {
 	{
 #define ERROR_EXTERNAL_MESSAGE 0
-		.code = "405",
-		.name = "not-allowed",
-		.type = "cancel",
+		.code = "406",
+		.name = "not-acceptable",
+		.type = "modify",
 		.text = "Only participants are allowed to send messages to this conference"
 	}, {
 #define ERROR_PARTICIPANT_NOT_IN_ROOM 1

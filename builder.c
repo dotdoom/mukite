@@ -17,16 +17,16 @@
 	}
 
 #define BUF_PUSH_BUF(bptr) \
-	BUF_PUSH(bptr.data, bptr.size)
+	BUF_PUSH((bptr).data, (bptr).size)
 
 #define BUF_PUSH_STR(str) \
 	BUF_PUSH((str), strlen(str))
 
 #define BUF_PUSH_BPT(bptr) \
-	BUF_PUSH(bptr.data, BPT_SIZE(&bptr))
+	BUF_PUSH((bptr).data, BPT_SIZE(&(bptr)))
 
 #define BUF_PUSH_IFBPT(bptr) \
-	{ if (bptr.data) { BUF_PUSH_BPT(bptr) } }
+	{ if ((bptr).data) { BUF_PUSH_BPT(bptr) } }
 
 #define BUF_PUSH_LITERAL(data) \
 	BUF_PUSH(data, sizeof(data)-1)
@@ -88,6 +88,30 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 	return TRUE;
 }
 
+BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
+	int chunk_size;
+	ParticipantEntry *participant;
+
+	BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#items'>");
+
+	participant = room->participants;
+	while (participant) {
+		BUF_PUSH_LITERAL("<item name='");
+		BUF_PUSH_BUF(participant->nick);
+		BUF_PUSH_LITERAL("' jid='");
+		BUF_PUSH_BUF(room->node);
+		BUF_PUSH_LITERAL("@");
+		BUF_PUSH_BUF(*host);
+		BUF_PUSH_LITERAL("/");
+		BUF_PUSH_BUF(participant->nick);
+		BUF_PUSH_LITERAL("'/>");
+		participant = participant->next;
+	}
+	BUF_PUSH_LITERAL("</query>");
+
+	return TRUE;
+}
+
 BOOL build_error(XMPPError *error, BuilderBuffer *buffer) {
 	int chunk_size;
 
@@ -97,7 +121,8 @@ BOOL build_error(XMPPError *error, BuilderBuffer *buffer) {
 	BUF_PUSH_STR(error->type);
 	BUF_PUSH_LITERAL("'><");
 	BUF_PUSH_STR(error->name);
-	BUF_PUSH_LITERAL(" xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/><text>");
+	BUF_PUSH_LITERAL(" xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'/>"
+			"<text xmlns='urn:ietf:params:xml:ns:xmpp-stanzas'>");
 	BUF_PUSH_STR(error->text);
 	BUF_PUSH_LITERAL("</text></error>");
 
@@ -154,7 +179,7 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 
 	if (!packet->header.data &&
 			!packet->user_data.data &&
-			(packet->name == 'p'/* || !packet->system_data.data*/)) {
+			(packet->name == 'p')) {
 		BUF_PUSH_LITERAL("'/>");
 	} else {
 		BUF_PUSH_LITERAL("'>");
@@ -165,12 +190,37 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 				return FALSE;
 			}
 		} else {
-			if (packet->name == 'p') {
-				if (!build_presence_mucadm(&packet->participant, buffer)) {
-					return FALSE;
-				}
-			} else {
-				//BUF_PUSH_IFBPT(packet->system_data);
+			switch (packet->name) {
+				case 'p':
+					if (!build_presence_mucadm(&packet->participant, buffer)) {
+						return FALSE;
+					}
+					break;
+				case 'i':
+					switch (packet->iq_type) {
+						case BUILD_IQ_VERSION:
+							BUF_PUSH_LITERAL(
+									"<query xmlns='jabber:iq:version'>"
+										"<name>Mukite http://mukite.org/</name>"
+										"<version>git</version>"
+										"<os>Windows-XP 5.01.2600</os>"
+									"</query>");
+							break;
+						case BUILD_IQ_LAST:
+							BUF_PUSH_LITERAL("<query xmlns='jabber:iq:last' seconds='");
+							// We assume buffer is always large enough to hold int64
+							buffer->data_end += sprintf(buffer->data_end, "%lld", packet->iq_last.seconds);
+							BUF_PUSH_LITERAL("'/>");
+							break;
+						case BUILD_IQ_TIME:
+							BUF_PUSH_LITERAL("<time xmlns='xmpp:urn:time'><tzo>");
+							BUF_PUSH_STR(packet->iq_time.tzo);
+							BUF_PUSH_LITERAL("</tzo><utc>");
+							BUF_PUSH_STR(packet->iq_time.utc);
+							BUF_PUSH_LITERAL("</utc></time>");
+							break;
+					}
+					break;
 			}
 		}
 		switch (packet->name) {

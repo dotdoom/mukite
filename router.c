@@ -5,9 +5,6 @@
 
 #include "router.h"
 
-#define IQ_VERSION_RESULT "<query xmlns='jabber:iq:version'><name>Mukite http://mukite.org/</name><version>svn</version><os>Windows-XP 5.01.2600</os></query>"
-#define IQ_LAST_RESULT "<query xmlns='jabber:iq:last' seconds='321898758'/>"
-#define IQ_URN_TIME_RESULT "<time xmlns='urn:xmpp:time'><tzo>-06:00</tzo><utc>2006-12-19T17:58:35Z</utc></time>"
 #define IQ_STATS_ITEMS_RESULT "<query xmlns='http://jabber.org/protocol/stats'><stat name='time/uptime'/></query>"
 #define IQ_STATS_VALUES_RESULT "<query xmlns='http://jabber.org/protocol/stats'><stat name='time/uptime' units='seconds' value='3054635'/></query>"
 #define IQ_DISCO_INFO_RESULT \
@@ -68,6 +65,75 @@ void router_cleanup(IncomingPacket *packet) {
 }
 
 void component_handle(RouterChunk *chunk) {
+	IncomingPacket *input = &chunk->input;
+	BuilderPacket *output = &chunk->output;
+	BufferPtr buffer = input->inner, node = buffer;
+	Buffer node_name;
+	XmlAttr xmlns_attr;
+	BOOL xmlns_found;
+	struct tm tm;
+	time_t tm_t;
+
+	if (input->name != 'i') {
+		// We do not handle <message> or <presence> to the nodeless JID
+		return;
+	}
+
+	jid_cpy(&output->to, &input->real_from, JID_FULL);
+	router_cleanup(&chunk->input);
+	output->from_nick.data = 0;
+	output->type = 'r';
+
+	switch (input->type) {
+		case 'g':
+			for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
+					node.data = buffer.data) {
+				node.end = buffer.data;
+				xmlfsm_node_name(&node, &node_name);
+
+				xmlns_found = FALSE;
+				while (xmlfsm_get_attr(&node, &xmlns_attr) == XMLPARSE_SUCCESS) {
+					if (BPT_EQ_LIT("xmlns", &xmlns_attr.name)) {
+						xmlns_found = TRUE;
+						break;
+					}
+				}
+
+				if (!xmlns_found) {
+					// No use of <query> without xmlns="..."
+					continue;
+				}
+
+				if (BUF_EQ_LIT("query", &node_name)) {
+					if (BPT_EQ_LIT("jabber:iq:version", &xmlns_attr.value)) {
+						output->iq_type = BUILD_IQ_VERSION;
+					}
+					if (BPT_EQ_LIT("jabber:iq:last", &xmlns_attr.value)) {
+						output->iq_type = BUILD_IQ_LAST;
+						output->iq_last.seconds = time(0) - chunk->startup;
+					}
+				}
+
+				if (BUF_EQ_LIT("time", &node_name) &&
+					BPT_EQ_LIT("urn:xmpp:time", &xmlns_attr.value)) {
+					output->iq_type = BUILD_IQ_TIME;
+					time(&tm_t);
+					localtime_r(&tm_t, &tm);
+					strftime(output->iq_time.tzo, sizeof(output->iq_time.tzo), "%z", &tm);
+					gmtime_r(&tm_t, &tm);
+					strftime(output->iq_time.utc, sizeof(output->iq_time.utc), "%Y-%m-%dT%T", &tm);
+					strcat(output->iq_time.utc, "Z");
+				}
+
+				if (output->iq_type) {
+					chunk->send.proc(chunk->send.data);
+					break;
+				}
+			}
+			break;
+	}
+
+	jid_destroy(&output->to);
 }
 
 void router_process(RouterChunk *chunk) {

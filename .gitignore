@@ -1,6 +1,5 @@
 *.o
 .*.un~
 *.swp
-*.so*
-rooms.dat
-mukite
+/rooms.dat
+/mukite

@@ -34,6 +34,7 @@ typedef struct RouterChunk {
 	Rooms *rooms;
 	ACLConfig *acl;
 	BuilderPacket output;
+	time_t startup;
 } RouterChunk;
 
 void router_process(RouterChunk *);

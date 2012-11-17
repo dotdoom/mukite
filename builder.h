@@ -3,6 +3,8 @@
 
 #include "xmcomp/common.h"
 
+#include "room.h"
+
 #define MAX_STATUS_CODES 5
 
 typedef struct {
@@ -20,6 +22,10 @@ typedef struct {
 	char text[200];
 } XMPPError;
 
+#define BUILD_IQ_VERSION 1
+#define BUILD_IQ_LAST 2
+#define BUILD_IQ_TIME 3
+
 typedef struct {
 	Buffer from_node, from_host, from_nick;
 
@@ -27,10 +33,20 @@ typedef struct {
 
 	char name, type;
 
+	int iq_type;
+
 	BufferPtr header, user_data;
 	union {
 		MucAdmNode participant;
 		XMPPError *error;
+		Room *room;
+		struct {
+			long long seconds;
+		} iq_last;
+		struct {
+			char tzo[10];
+			char utc[20];
+		} iq_time;
 	};
 } BuilderPacket;
 
