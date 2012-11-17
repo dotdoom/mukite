@@ -110,7 +110,9 @@ BOOL registered_nicks_deserialize(RegisteredNick **list, FILE *input, int limit)
 BOOL rooms_serialize(Rooms *rooms, FILE *output) {
 	Room *list = rooms->start;
 	LDEBUG("serializing room list");
-	registered_nicks_serialize(rooms->registered_nicks, output);
+	if (!registered_nicks_serialize(rooms->registered_nicks, output)) {
+		return FALSE;
+	}
 	SERIALIZE_LIST(
 		room_serialize(list, output)
 	)
@@ -121,7 +123,9 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
 	Room *new_entry = 0;
 	Room **list = &rooms->start;
 	LDEBUG("deserializing room list");
-	registered_nicks_deserialize(&rooms->registered_nicks, input, MAX_REGISTERED_NICKS);
+	if (!registered_nicks_deserialize(&rooms->registered_nicks, input, MAX_REGISTERED_NICKS)) {
+		return FALSE;
+	}
 	DESERIALIZE_LIST(
 		room_deserialize(new_entry, input),
 		rooms->end = new_entry

@@ -41,7 +41,9 @@ static void load_data() {
 	LINFO("loading from the file: '%s'", config.parser.data_file);
 	if ((input = fopen(config.parser.data_file, "r"))) {
 		if (!rooms_deserialize(&config.rooms, input, 100)) {
-			LERROR("deserialization failure, probably disk error/version mismatch");
+			LERROR("deserialization failure, probably disk error/version mismatch;\n"
+					"please rename or remove the data file to start from scratch");
+			exit(2);
 		}
 		fclose(input);
 	} else {
@@ -70,7 +72,7 @@ int main(int argc, char **argv) {
 	// CBuffer buffer for the writer
 	char *writer_buffer = 0;
 
-	LINFO("%s %d starting", APP_NAME, VERSION);
+	LINFO("%s starting", APP_NAME);
 
 	config_init(&config, argc > 1 ? argv[1] : 0);
 	if (!config_read(&config)) {
@@ -134,10 +136,12 @@ int main(int argc, char **argv) {
 		config_apply(&config);
 
 		LINFO("started");
+		LDEBUG("joining reader thread");
 		pthread_join(config.reader_thread_id, 0);
 		// Switch cbuffer to offline, indicating no more data is expected.
 		// As soon as the writer finishes the job, it will terminate
 		cbuffer_offline(&config.writer_thread.cbuffer);
+		LDEBUG("joining writer thread");
 		pthread_join(config.writer_thread_id, 0);
 
 		LINFO("destroying buffers, queues and disconnecting");
