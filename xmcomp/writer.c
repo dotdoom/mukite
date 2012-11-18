@@ -1,6 +1,3 @@
-#include <pthread.h>
-#include <signal.h>
-
 #include "network.h"
 #include "cbuffer.h"
 #include "sighelper.h"

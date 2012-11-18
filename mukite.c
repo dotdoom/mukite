@@ -59,7 +59,7 @@ static void terminate(int signal) {
 	if (config.reader_thread.enabled) {
 		// SIGUSR2 the reader thread to interrupt the recv() call
 		config.reader_thread.enabled = FALSE;
-		pthread_kill(config.reader_thread_id, SIGUSR2);
+		pthread_kill(config.reader_thread.thread, SIGUSR2);
 
 		// As soon as reader thread is terminated, main() terminates the writer thread and wraps up
 	}
@@ -125,24 +125,24 @@ int main(int argc, char **argv) {
 		LINFO("creating writer thread");
 		config.writer_thread.socket = &config.socket;
 		config.writer_thread.enabled = TRUE;
-		pthread_create(&config.writer_thread_id, 0, writer_thread_entry, (void *)&config.writer_thread);
+		pthread_create(&config.writer_thread.thread, 0, writer_thread_entry, (void *)&config.writer_thread);
 
 		LINFO("creating reader thread");
 		config.reader_thread.socket = &config.socket;
 		config.reader_thread.enabled = TRUE;
-		pthread_create(&config.reader_thread_id, 0, reader_thread_entry, (void *)&config.reader_thread);
+		pthread_create(&config.reader_thread.thread, 0, reader_thread_entry, (void *)&config.reader_thread);
 
 		LINFO("creating worker threads");
 		config_apply(&config);
 
 		LINFO("started");
 		LDEBUG("joining reader thread");
-		pthread_join(config.reader_thread_id, 0);
+		pthread_join(config.reader_thread.thread, 0);
 		// Switch cbuffer to offline, indicating no more data is expected.
 		// As soon as the writer finishes the job, it will terminate
 		cbuffer_offline(&config.writer_thread.cbuffer);
 		LDEBUG("joining writer thread");
-		pthread_join(config.writer_thread_id, 0);
+		pthread_join(config.writer_thread.thread, 0);
 
 		LINFO("destroying buffers, queues and disconnecting");
 		cbuffer_destroy(&config.writer_thread.cbuffer);

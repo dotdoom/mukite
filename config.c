@@ -91,7 +91,7 @@ void config_init(Config *config, char *filename) {
 }
 
 void config_apply(Config *config) {
-	int i;
+	int i, error;
 	ParserConfig *parser = 0;
 	FILE *acl_data_file = 0;
 
@@ -107,7 +107,8 @@ void config_apply(Config *config) {
 		config->acl.default_role;
 
 	if (!(acl_data_file = fopen(config->acl.data_file, "r"))) {
-		LERROR("could not open acl data file '%s' for reading", config->acl.data_file);
+		error = errno;
+		LERRNO("could not open acl data file '%s' for reading", error, config->acl.data_file);
 	} else {
 		acl_deserialize(&config->acl_config, acl_data_file, MAX_ACLS);
 		fclose(acl_data_file);
@@ -119,19 +120,19 @@ void config_apply(Config *config) {
 		config->parser.threads = PARSERS_COUNT_LIMIT;
 	}
 
-	if (config->parser_threads_count < config->parser.threads) {
-		for (i = config->parser_threads_count; i < config->parser.threads; ++i) {
-			parser = &config->parser_threads[i];
+	if (config->parser_threads.count < config->parser.threads) {
+		for (i = config->parser_threads.count; i < config->parser.threads; ++i) {
+			parser = &config->parser_threads.threads[i];
 			parser->enabled = TRUE;
 			parser->global_config = config;
 			pthread_create(&parser->thread, 0, parser_thread_entry, (void *)parser);
-			++config->parser_threads_count;
+			++config->parser_threads.count;
 		}
-	} else if (config->parser_threads_count > config->parser.threads) {
-		for (i = config->parser.threads; i < config->parser_threads_count; ++i) {
-			parser = &config->parser_threads[i];
+	} else if (config->parser_threads.count > config->parser.threads) {
+		for (i = config->parser.threads; i < config->parser_threads.count; ++i) {
+			parser = &config->parser_threads.threads[i];
 			parser->enabled = FALSE;
-			--config->parser_threads_count;
+			--config->parser_threads.count;
 		}
 	}
 }

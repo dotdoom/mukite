@@ -1,5 +1,3 @@
-#include <pthread.h>
-#include <signal.h>
 #include <string.h>
 #include <stdlib.h>
 
@@ -142,6 +140,7 @@ void *reader_thread_entry(void *void_config) {
 					++stats->mallocs;
 				}
 				if (!current_stanza_entry->buffer) {
+					// FIXME(artem): memory leak in case of realloc failure
 					LERROR("failed to (re)allocate a buffer of size %d for the stanza",
 							desired_stanza_buffer_size);
 					current_stanza_entry->buffer_size = 0;

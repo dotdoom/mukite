@@ -32,6 +32,7 @@ BOOL jid_struct(BufferPtr *jid_string, Jid *jid_struct) {
 				}
 				break;
 			case JID_RESOURCE:
+				// FIXME(artem): optimization for longer resources
 				break;
 		}
 	}

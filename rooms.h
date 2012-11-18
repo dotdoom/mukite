@@ -19,7 +19,7 @@ typedef struct {
 	int count;
 	Room *start, *end;
 	RegisteredNick *registered_nicks;
-	pthread_mutex_t sync;
+	pthread_rwlock_t sync;
 } Rooms;
 
 void rooms_init(Rooms *);

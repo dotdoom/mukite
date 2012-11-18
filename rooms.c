@@ -52,20 +52,20 @@ static XMPPError error_definitions[] = {
 void rooms_init(Rooms *rooms) {
 	rooms->start = rooms->end = 0;
 	rooms->count = 0;
-	pthread_mutex_init(&rooms->sync, 0);
+	pthread_rwlock_init(&rooms->sync, 0);
 }
 
 Room *rooms_find(Rooms *rooms, Jid *jid) {
 	Room *room = 0;
 
-	pthread_mutex_lock(&rooms->sync);
+	pthread_rwlock_rdlock(&rooms->sync);
 	LDEBUG("searching for the existing room '%.*s'", JID_LEN(jid), JID_STR(jid));
 	for (room = rooms->start; room; room = room->next) {
 		if (!jid_strcmp(jid, &room->node, JID_NODE)) {
 			break;
 		}
 	}
-	pthread_mutex_unlock(&rooms->sync);
+	pthread_rwlock_unlock(&rooms->sync);
 
 	return room;
 }
@@ -73,7 +73,7 @@ Room *rooms_find(Rooms *rooms, Jid *jid) {
 Room *rooms_create(Rooms *rooms, Jid *jid) {
 	Room *room = 0;
 
-	pthread_mutex_lock(&rooms->sync);
+	pthread_rwlock_wrlock(&rooms->sync);
 	LINFO("creating new room '%.*s'", JID_LEN(jid), JID_STR(jid));
 	room = malloc(sizeof(*room));
 	room_init(room, &jid->node);
@@ -84,7 +84,7 @@ Room *rooms_create(Rooms *rooms, Jid *jid) {
 		rooms->start = room;
 	}
 	rooms->end = room;
-	pthread_mutex_unlock(&rooms->sync);
+	pthread_rwlock_unlock(&rooms->sync);
 
 	return room;
 }

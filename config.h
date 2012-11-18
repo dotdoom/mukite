@@ -50,15 +50,14 @@ typedef struct {
 
 	Socket socket;
 
-	pthread_t writer_thread_id;
 	WriterConfig writer_thread;
-
-	pthread_t reader_thread_id;
 	ReaderConfig reader_thread;
 
-	ParserConfig parser_threads[PARSERS_COUNT_LIMIT];
-	int parser_threads_count;
-	
+	struct {
+		int count;
+		ParserConfig threads[PARSERS_COUNT_LIMIT];
+	} parser_threads;
+
 	Rooms rooms;
 	ACLConfig acl_config;
 } Config;

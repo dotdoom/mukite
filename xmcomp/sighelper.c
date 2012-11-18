@@ -16,8 +16,7 @@ void sighelper_sigaction(int signal, SigHandler handler) {
 	struct sigaction action;
 	memset(&action, 0, sizeof(action));
 	action.sa_handler = handler;
-	sigemptyset(&action.sa_mask);
-	// Safety: do not allow signal handler to be reentrant
-	sigaddset(&action.sa_mask, signal);
+	// Safety: do not allow other signals while current handler is active
+	sigfillset(&action.sa_mask);
 	sigaction(signal, &action, 0);
 }

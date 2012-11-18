@@ -34,7 +34,7 @@ static XMPPError error_definitions[] = {
 		.code = "403",
 		.name = "forbidden",
 		.type = "cancel",
-		.text = "Visitors are not allowed to send private messages here"
+		.text = "Visitors are not allowed to send private messages in this room"
 	}, {
 #define ERROR_NO_VISITORS_PUBLIC 3
 		.code = "403",
