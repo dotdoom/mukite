@@ -28,12 +28,12 @@ typedef struct {
 } SendCallback;
 
 typedef struct RouterChunk {
-	IncomingPacket input;
+	IncomingPacket ingress;
 	SendCallback send;
 	Buffer hostname;
 	Rooms *rooms;
 	ACLConfig *acl;
-	BuilderPacket output;
+	BuilderPacket egress;
 	time_t startup;
 } RouterChunk;
 

@@ -162,7 +162,7 @@ BOOL send_packet(void *void_local_buffer_storage) {
 		cbuffer_write(lbs->cbuffer, lbs->buffer.data, lbs->buffer.data_end - lbs->buffer.data);
 		return TRUE;
 	} else {
-		LERROR("parser output buffer (%d bytes) is not large enough to hold a stanza",
+		LERROR("parser output buffer (%d bytes) is not large enough to hold a stanza - dropped",
 				BPT_SIZE(&lbs->buffer));
 		return FALSE;
 	}
@@ -190,7 +190,7 @@ void *parser_thread_entry(void *void_parser_config) {
 	lbs.buffer.data = malloc(allocated_buffer_size);
 	lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
 	lbs.cbuffer = &config->writer_thread.cbuffer;
-	lbs.packet = &router_chunk.output;
+	lbs.packet = &router_chunk.egress;
 
 	LINFO("started");
 	sighelper_sigblockall(0);
@@ -207,7 +207,7 @@ void *parser_thread_entry(void *void_parser_config) {
 			stanza_entry_buffer.data = stanza_entry->buffer;
 			stanza_entry_buffer.end = stanza_entry->buffer + stanza_entry->data_size;
 
-			if (parse_incoming_packet(&stanza_entry_buffer, &router_chunk.input)) {
+			if (parse_incoming_packet(&stanza_entry_buffer, &router_chunk.ingress)) {
 				lbs.buffer.data_end = lbs.buffer.data;
 				router_process(&router_chunk);
 			}

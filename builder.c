@@ -88,6 +88,31 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 	return TRUE;
 }
 
+BOOL build_stats(BuilderBuffer *buffer) {
+	/*
+<stat name='time/uptime'/>
+<stat name='queue/overflows'/>
+<stat name='queue/underflows'/>
+<stat name='queue/realloc/enlarges'/>
+<stat name='queue/realloc/shortens'/>
+<stat name='queue/mallocs'/>
+<stat name='queue/data/push'/>
+<stat name='queue/data/pop'/>
+<stat name='queue/free/push'/>
+<stat name='queue/free/pop'/>
+<stat name='cbuffer/underflows'/>
+<stat name='cbuffer/overflows'/>
+<stat name='cbuffer/writes'/>
+<stat name='muc/rooms'/>
+<stat name='muc/users'/>
+<stat name='muc/jids'/>
+
+
+<stat name='time/uptime' unit='seconds' value='1024'/>
+	 */
+	return FALSE;
+}
+
 BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
 	int chunk_size;
 	ParticipantEntry *participant;
@@ -209,7 +234,7 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 						case BUILD_IQ_LAST:
 							BUF_PUSH_LITERAL("<query xmlns='jabber:iq:last' seconds='");
 							// We assume buffer is always large enough to hold int64
-							buffer->data_end += sprintf(buffer->data_end, "%lld", packet->iq_last.seconds);
+							buffer->data_end += sprintf(buffer->data_end, "%.0f", packet->iq_last.seconds);
 							BUF_PUSH_LITERAL("'/>");
 							break;
 						case BUILD_IQ_TIME:

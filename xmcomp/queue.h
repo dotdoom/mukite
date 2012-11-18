@@ -33,7 +33,15 @@ typedef struct {
 		// Reallocations to shorten the dynamic buffer
 		realloc_shortens,
 		// Initial block buffer memory allocations
-		mallocs;
+		mallocs,
+		// Number of times a data chunk (stanza) has been pushed into queue
+		data_pushes,
+		// Number of times a data chunk request has been satisfied
+		data_pops,
+		// Number of times free chunk is returned to the queue
+		free_pushes,
+		// Number of times free chunk request has been satisfied
+		free_pops;
 } StanzaQueueStats;
 
 typedef struct {

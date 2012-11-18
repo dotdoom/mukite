@@ -5,8 +5,6 @@
 
 #include "router.h"
 
-#define IQ_STATS_ITEMS_RESULT "<query xmlns='http://jabber.org/protocol/stats'><stat name='time/uptime'/></query>"
-#define IQ_STATS_VALUES_RESULT "<query xmlns='http://jabber.org/protocol/stats'><stat name='time/uptime' units='seconds' value='3054635'/></query>"
 #define IQ_DISCO_INFO_RESULT \
 	"<identity category='conference' type='text' name='Play-Specific Chatrooms'/><identity category='directory' type='chatroom' name='Play-Specific Chatrooms'/>" \
 	"<feature var='http://jabber.org/protocol/disco#info'/>" \
@@ -65,26 +63,26 @@ void router_cleanup(IncomingPacket *packet) {
 }
 
 void component_handle(RouterChunk *chunk) {
-	IncomingPacket *input = &chunk->input;
-	BuilderPacket *output = &chunk->output;
-	BufferPtr buffer = input->inner, node = buffer;
+	IncomingPacket *ingress = &chunk->ingress;
+	BuilderPacket *egress = &chunk->egress;
+	BufferPtr buffer = ingress->inner, node = buffer;
 	Buffer node_name;
 	XmlAttr xmlns_attr;
 	BOOL xmlns_found;
 	struct tm tm;
 	time_t tm_t;
 
-	if (input->name != 'i') {
+	if (ingress->name != 'i') {
 		// We do not handle <message> or <presence> to the nodeless JID
 		return;
 	}
 
-	jid_cpy(&output->to, &input->real_from, JID_FULL);
-	router_cleanup(&chunk->input);
-	output->from_nick.data = 0;
-	output->type = 'r';
+	jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
+	router_cleanup(&chunk->ingress);
+	egress->from_nick.data = 0;
+	egress->type = 'r';
 
-	switch (input->type) {
+	switch (ingress->type) {
 		case 'g':
 			for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
 					node.data = buffer.data) {
@@ -106,26 +104,29 @@ void component_handle(RouterChunk *chunk) {
 
 				if (BUF_EQ_LIT("query", &node_name)) {
 					if (BPT_EQ_LIT("jabber:iq:version", &xmlns_attr.value)) {
-						output->iq_type = BUILD_IQ_VERSION;
+						egress->iq_type = BUILD_IQ_VERSION;
 					}
 					if (BPT_EQ_LIT("jabber:iq:last", &xmlns_attr.value)) {
-						output->iq_type = BUILD_IQ_LAST;
-						output->iq_last.seconds = time(0) - chunk->startup;
+						egress->iq_type = BUILD_IQ_LAST;
+						egress->iq_last.seconds = difftime(time(0), chunk->startup);
+					}
+					if (BPT_EQ_LIT("http://jabber.org/protocol/stats", &xmlns_attr.value)) {
+						//.iq_type = BUILD_IQ_STATS;
 					}
 				}
 
 				if (BUF_EQ_LIT("time", &node_name) &&
 					BPT_EQ_LIT("urn:xmpp:time", &xmlns_attr.value)) {
-					output->iq_type = BUILD_IQ_TIME;
+					egress->iq_type = BUILD_IQ_TIME;
 					time(&tm_t);
 					localtime_r(&tm_t, &tm);
-					strftime(output->iq_time.tzo, sizeof(output->iq_time.tzo), "%z", &tm);
+					strftime(egress->iq_time.tzo, sizeof(egress->iq_time.tzo), "%z", &tm);
 					gmtime_r(&tm_t, &tm);
-					strftime(output->iq_time.utc, sizeof(output->iq_time.utc), "%Y-%m-%dT%T", &tm);
-					strcat(output->iq_time.utc, "Z");
+					strftime(egress->iq_time.utc, sizeof(egress->iq_time.utc), "%Y-%m-%dT%T", &tm);
+					strcat(egress->iq_time.utc, "Z");
 				}
 
-				if (output->iq_type) {
+				if (egress->iq_type) {
 					chunk->send.proc(chunk->send.data);
 					break;
 				}
@@ -133,31 +134,31 @@ void component_handle(RouterChunk *chunk) {
 			break;
 	}
 
-	jid_destroy(&output->to);
+	jid_destroy(&egress->to);
 }
 
 void router_process(RouterChunk *chunk) {
-	IncomingPacket *input = &chunk->input;
-	BuilderPacket *output = &chunk->output;
+	IncomingPacket *ingress = &chunk->ingress;
+	BuilderPacket *egress = &chunk->egress;
 
-	memset(output, 0, sizeof(*output));
-	output->name = input->name;
-	output->type = input->type;
-	output->header = input->header;
-	output->from_host = chunk->hostname;
+	memset(egress, 0, sizeof(*egress));
+	egress->name = ingress->name;
+	egress->type = ingress->type;
+	egress->header = ingress->header;
+	egress->from_host = chunk->hostname;
 
 	LDEBUG("routing packet:\n"
 			" ** Stanza '%c' type '%c'\n"
 			" ** '%.*s' -> '%.*s'\n"
 			" ** Header: '%.*s'\n"
 			" ** Data: '%.*s'",
-			input->name, input->type,
-			JID_LEN(&input->real_from), JID_STR(&input->real_from),
-			JID_LEN(&input->proxy_to), JID_STR(&input->proxy_to),
-			BPT_SIZE(&input->header), input->header.data,
-			BPT_SIZE(&input->inner), input->inner.data);
+			ingress->name, ingress->type,
+			JID_LEN(&ingress->real_from), JID_STR(&ingress->real_from),
+			JID_LEN(&ingress->proxy_to), JID_STR(&ingress->proxy_to),
+			BPT_SIZE(&ingress->header), ingress->header.data,
+			BPT_SIZE(&ingress->inner), ingress->inner.data);
 
-	if (BPT_SIZE(&input->proxy_to.node)) {
+	if (BPT_SIZE(&ingress->proxy_to.node)) {
 		rooms_route(chunk);
 	} else {
 		component_handle(chunk);
@@ -165,14 +166,15 @@ void router_process(RouterChunk *chunk) {
 }
 
 void router_error(RouterChunk *chunk, XMPPError *error) {
-	BuilderPacket *output = &chunk->output;
+	IncomingPacket *ingress = &chunk->ingress;
+	BuilderPacket *egress = &chunk->egress;
 
-	jid_cpy(&output->to, &chunk->input.real_from, JID_FULL);
-	router_cleanup(&chunk->input);
-	output->from_nick.data = 0;
-	output->type = 'e';
-	output->error = error;
-	output->user_data = chunk->input.inner;
+	jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
+	router_cleanup(ingress);
+	egress->from_nick.data = 0;
+	egress->type = 'e';
+	egress->error = error;
+	egress->user_data = ingress->inner;
 	chunk->send.proc(chunk->send.data);
-	jid_destroy(&output->to);
+	jid_destroy(&egress->to);
 }

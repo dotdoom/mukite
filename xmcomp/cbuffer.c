@@ -63,6 +63,7 @@ inline void cbuffer_write(CBuffer *cbuffer, char *buffer, int size) {
 
 		pthread_cond_signal(&sync->data_available_cv);
 	}
+	++stats->reads;
 	pthread_mutex_unlock(&cbuffer->sync.cbuffer_mutex);
 }
 

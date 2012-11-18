@@ -16,7 +16,7 @@ typedef struct {
 } CBufferSync;
 
 typedef struct {
-	int overflows, underflows;
+	int overflows, underflows, reads;
 } CBufferStats;
 
 typedef struct {

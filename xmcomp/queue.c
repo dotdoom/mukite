@@ -18,6 +18,7 @@ inline StanzaEntry *queue_pop_free(StanzaQueue *queue) {
 	}
 	block = queue->free_queue;
 	queue->free_queue = block->next;
+	++stats->free_pops;
 	pthread_mutex_unlock(&sync->free_queue_mutex);
 
 	return block;
@@ -41,6 +42,7 @@ inline StanzaEntry *queue_pop_data(StanzaQueue *queue) {
 	if (queue->data_end_queue == block) { // && queue->data_start_queue == 0
 		queue->data_end_queue = 0;
 	}
+	++stats->data_pops;
 	pthread_mutex_unlock(&sync->data_queue_mutex);
 
 	return block;
@@ -60,6 +62,7 @@ inline void queue_push_data(StanzaQueue *queue, StanzaEntry *stanza) {
 		queue->data_end_queue = queue->data_start_queue = stanza;
 	}
 	pthread_cond_signal(&sync->data_available_cv);
+	++queue->stats.data_pushes;
 	pthread_mutex_unlock(&sync->data_queue_mutex);
 }
 
@@ -73,6 +76,7 @@ inline void queue_push_free(StanzaQueue *queue, StanzaEntry *stanza) {
 	stanza->next = queue->free_queue;
 	queue->free_queue = stanza;
 	pthread_cond_signal(&sync->free_available_cv);
+	++queue->stats.free_pushes;
 	pthread_mutex_unlock(&sync->free_queue_mutex);
 }
 

@@ -41,7 +41,7 @@ typedef struct {
 		XMPPError *error;
 		Room *room;
 		struct {
-			long long seconds;
+			double seconds;
 		} iq_last;
 		struct {
 			char tzo[10];
