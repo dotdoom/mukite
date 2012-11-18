@@ -20,7 +20,7 @@ typedef struct {
 	pthread_rwlock_t sync;
 } ACLConfig;
 
-void acl_init(ACLConfig *, int default_role);
+void acl_init(ACLConfig *);
 
 int acl_role(ACLConfig *, Jid *);
 BOOL acl_serialize(ACLConfig *, FILE *);

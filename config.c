@@ -79,6 +79,7 @@ void config_init(Config *config, char *filename) {
 	if (filename) {
 		strncpy(config->filename, filename, FILENAME_MAX);
 	}
+	acl_init(&config->acl_config);
 
 	// Some defaults
 	config->reader.block = 0;

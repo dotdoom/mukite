@@ -8,8 +8,7 @@
 
 #include "acl.h"
 
-void acl_init(ACLConfig *acl, int default_role) {
-	acl->default_role = default_role;
+void acl_init(ACLConfig *acl) {
 	acl->first = 0;
 	pthread_rwlock_init(&acl->sync, 0);
 }
