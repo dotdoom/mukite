@@ -3,6 +3,7 @@
 
 #include "xmcomp/common.h"
 
+#include "rooms.h"
 #include "room.h"
 
 #define MAX_STATUS_CODES 5
@@ -25,6 +26,11 @@ typedef struct {
 #define BUILD_IQ_VERSION 1
 #define BUILD_IQ_LAST 2
 #define BUILD_IQ_TIME 3
+#define BUILD_IQ_STATS 4
+#define BUILD_IQ_DISCO_INFO 10
+#define BUILD_IQ_DISCO_ITEMS 11
+#define BUILD_IQ_ROOM_DISCO_INFO 20
+#define BUILD_IQ_ROOM_DISCO_ITEMS 21
 
 typedef struct {
 	Buffer from_node, from_host, from_nick;
@@ -47,6 +53,7 @@ typedef struct {
 			char tzo[10];
 			char utc[20];
 		} iq_time;
+		Rooms *rooms;
 	};
 } BuilderPacket;
 

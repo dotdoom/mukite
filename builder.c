@@ -115,12 +115,9 @@ BOOL build_stats(BuilderBuffer *buffer) {
 
 BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
 	int chunk_size;
-	ParticipantEntry *participant;
+	ParticipantEntry *participant = room->participants;
 
-	BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#items'>");
-
-	participant = room->participants;
-	while (participant) {
+	for (; participant; participant = participant->next) {
 		BUF_PUSH_LITERAL("<item name='");
 		BUF_PUSH_BUF(participant->nick);
 		BUF_PUSH_LITERAL("' jid='");
@@ -130,9 +127,55 @@ BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
 		BUF_PUSH_LITERAL("/");
 		BUF_PUSH_BUF(participant->nick);
 		BUF_PUSH_LITERAL("'/>");
-		participant = participant->next;
 	}
-	BUF_PUSH_LITERAL("</query>");
+
+	return TRUE;
+}
+
+BOOL build_room_info(BuilderBuffer *buffer, Room *room, Buffer *host) {
+	int chunk_size;
+
+	BUF_PUSH_LITERAL("<identity category='conference' type='text' name='");
+	if (room->title.size) {
+		BUF_PUSH_BUF(room->title);
+	} else {
+		BUF_PUSH_BUF(room->node);
+	}
+	BUF_PUSH_LITERAL("'/><feature var='http://jabber.org/protocol/muc'/>");
+	
+	// TODO(artem): build items depending on room flags
+	/*
+		"<feature var='muc_public'/>"
+		"<feature var='muc_persistent'/>"
+		"<feature var='muc_open'/>"
+		"<feature var='muc_semianonymous'/>"
+		"<feature var='muc_moderated'/>"
+		"<feature var='muc_unsecured'/>"
+	*/
+
+	return TRUE;
+}
+
+BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
+	int chunk_size;
+	char participants_count[20];
+	Room *room = rooms->start;
+
+	for (; room; room = room->next) {
+		BUF_PUSH_LITERAL("<item name='");
+		if (room->title.size) {
+			BUF_PUSH_BUF(room->title);
+		} else {
+			BUF_PUSH_BUF(room->node);
+		}
+		sprintf(participants_count, " (%d)", room->participants_count);
+		BUF_PUSH_STR(participants_count);
+		BUF_PUSH_LITERAL("' jid='");
+		BUF_PUSH_BUF(room->node);
+		BUF_PUSH_LITERAL("@");
+		BUF_PUSH_BUF(*host);
+		BUF_PUSH_LITERAL("'/>");
+	}
 
 	return TRUE;
 }
@@ -243,6 +286,41 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 							BUF_PUSH_LITERAL("</tzo><utc>");
 							BUF_PUSH_STR(packet->iq_time.utc);
 							BUF_PUSH_LITERAL("</utc></time>");
+							break;
+						case BUILD_IQ_DISCO_INFO:
+							BUF_PUSH_LITERAL(
+									"<query xmlns='http://jabber.org/protocol/disco#info'>"
+										"<identity category='conference' type='text' name='Mukite Chatrooms'/>"
+										"<identity category='directory' type='chatroom' name='Mukite Chatrooms'/>"
+										"<feature var='http://jabber.org/protocol/disco#info'/>"
+										"<feature var='http://jabber.org/protocol/disco#items'/>"
+										"<feature var='http://jabber.org/protocol/muc'/>"
+										"<feature var='jabber:iq:register'/>"
+										"<feature var='jabber:iq:last'/>"
+										"<feature var='jabber:iq:version'/>"
+										"<feature var='xmpp:urn:time'/>"
+									"</query>");
+							break;
+						case BUILD_IQ_DISCO_ITEMS:
+							BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#items'>");
+							if (!build_component_items(buffer, packet->rooms, &packet->from_host)) {
+								return FALSE;
+							}
+							BUF_PUSH_LITERAL("</query>");
+							break;
+						case BUILD_IQ_ROOM_DISCO_INFO:
+							BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#info'>");
+							if (!build_room_info(buffer, packet->room, &packet->from_host)) {
+								return FALSE;
+							}
+							BUF_PUSH_LITERAL("</query>");
+							break;
+						case BUILD_IQ_ROOM_DISCO_ITEMS:
+							BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#items'>");
+							if (!build_room_items(buffer, packet->room, &packet->from_host)) {
+								return FALSE;
+							}
+							BUF_PUSH_LITERAL("</query>");
 							break;
 					}
 					break;

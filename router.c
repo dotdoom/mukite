@@ -5,16 +5,6 @@
 
 #include "router.h"
 
-#define IQ_DISCO_INFO_RESULT \
-	"<identity category='conference' type='text' name='Play-Specific Chatrooms'/><identity category='directory' type='chatroom' name='Play-Specific Chatrooms'/>" \
-	"<feature var='http://jabber.org/protocol/disco#info'/>" \
-	"<feature var='http://jabber.org/protocol/disco#items'/>" \
-	"<feature var='http://jabber.org/protocol/muc'/>" \
-	"<feature var='jabber:iq:register'/>" \
-	"<feature var='jabber:iq:search'/>" \
-	"<feature var='jabber:iq:time'/>" \
-	"<feature var='jabber:iq:version'/>"
-
 void router_cleanup(IncomingPacket *packet) {
 /*
  * ----11111-----3333-----222----
@@ -105,13 +95,16 @@ void component_handle(RouterChunk *chunk) {
 				if (BUF_EQ_LIT("query", &node_name)) {
 					if (BPT_EQ_LIT("jabber:iq:version", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_VERSION;
-					}
-					if (BPT_EQ_LIT("jabber:iq:last", &xmlns_attr.value)) {
+					} else if (BPT_EQ_LIT("jabber:iq:last", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_LAST;
 						egress->iq_last.seconds = difftime(time(0), chunk->startup);
-					}
-					if (BPT_EQ_LIT("http://jabber.org/protocol/stats", &xmlns_attr.value)) {
+					} else if (BPT_EQ_LIT("http://jabber.org/protocol/stats", &xmlns_attr.value)) {
 						//.iq_type = BUILD_IQ_STATS;
+					} else if (BPT_EQ_LIT("http://jabber.org/protocol/disco#info", &xmlns_attr.value)) {
+						egress->iq_type = BUILD_IQ_DISCO_INFO;
+					} else if (BPT_EQ_LIT("http://jabber.org/protocol/disco#items", &xmlns_attr.value)) {
+						egress->rooms = chunk->rooms;
+						egress->iq_type = BUILD_IQ_DISCO_ITEMS;
 					}
 				}
 

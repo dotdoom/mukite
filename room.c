@@ -216,9 +216,10 @@ BOOL participants_serialize(ParticipantEntry *list, FILE *output) {
 	)
 }
 
-BOOL participants_deserialize(ParticipantEntry **list, FILE *input, int limit) {
+BOOL participants_deserialize(Room *room, FILE *input, int limit) {
 	int entry_count = 0;
 	ParticipantEntry *new_entry = 0;
+	ParticipantEntry **list = &room->participants;
 	LDEBUG("deserializing participant list");
 	DESERIALIZE_LIST(
 		jid_deserialize(&new_entry->jid, input) &&
@@ -226,7 +227,7 @@ BOOL participants_deserialize(ParticipantEntry **list, FILE *input, int limit) {
 		DESERIALIZE_BASE(new_entry->affiliation) &&
 		DESERIALIZE_BASE(new_entry->role),
 
-		new_entry->prev = *list
+		++room->participants_count; new_entry->prev = *list
 	)
 }
 
@@ -305,7 +306,7 @@ BOOL room_deserialize(Room *room, FILE *input) {
 		DESERIALIZE_BASE(room->max_participants) &&
 		DESERIALIZE_BASE(room->_unused) &&
 
-		participants_deserialize(&room->participants, input, PARTICIPANTS_LIMIT) &&
+		participants_deserialize(room, input, PARTICIPANTS_LIMIT) &&
 		affiliations_deserialize(&room->owners, input, AFFILIATION_LIST_LIMIT) &&
 		affiliations_deserialize(&room->admins, input, AFFILIATION_LIST_LIMIT) &&
 		affiliations_deserialize(&room->members, input, AFFILIATION_LIST_LIMIT) &&
@@ -586,6 +587,61 @@ void route_presence(Room *room, RouterChunk *chunk) {
 	}
 }
 
+void route_iq(Room *room, RouterChunk *chunk) {
+	IncomingPacket *ingress = &chunk->ingress;
+	BuilderPacket *egress = &chunk->egress;
+//	ParticipantEntry *sender = 0;
+	BufferPtr buffer = ingress->inner, node = buffer;
+	Buffer node_name;
+	XmlAttr xmlns_attr;
+	BOOL xmlns_found;
+
+	egress->type = 'r';
+	jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
+	router_cleanup(ingress);
+
+/*	if ((sender = room_participant_by_jid(room, &egress->to))) {
+	} else {*/
+
+	if (ingress->type == 'g') {
+		for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
+				node.data = buffer.data) {
+			node.end = buffer.data;
+			xmlfsm_node_name(&node, &node_name);
+
+			xmlns_found = FALSE;
+			while (xmlfsm_get_attr(&node, &xmlns_attr) == XMLPARSE_SUCCESS) {
+				if (BPT_EQ_LIT("xmlns", &xmlns_attr.name)) {
+					xmlns_found = TRUE;
+					break;
+				}
+			}
+
+			if (!xmlns_found) {
+				// No use of <query> without xmlns="..."
+				continue;
+			}
+
+			if (BUF_EQ_LIT("query", &node_name)) {
+				if (BPT_EQ_LIT("http://jabber.org/protocol/disco#info", &xmlns_attr.value)) {
+					egress->iq_type = BUILD_IQ_ROOM_DISCO_INFO;
+					egress->room = room;
+				} else if (BPT_EQ_LIT("http://jabber.org/protocol/disco#items", &xmlns_attr.value)) {
+					egress->iq_type = BUILD_IQ_ROOM_DISCO_ITEMS;
+					egress->room = room;
+				}
+			}
+
+			if (egress->iq_type) {
+				chunk->send.proc(chunk->send.data);
+				break;
+			}
+		}
+	}
+
+	jid_destroy(&egress->to);
+}
+
 void room_route(Room *room, RouterChunk *chunk) {
 	switch (chunk->ingress.name) {
 		case 'm':
@@ -595,15 +651,7 @@ void room_route(Room *room, RouterChunk *chunk) {
 			route_presence(room, chunk);
 			break;
 		case 'i':
-	/*		if (!sender) {
-				// TODO: iq:disco, iq:info etc
-				return;
-			}
-
-			output->type = 'r';
-			jid_cpy(&output->to, &chunk->input.real_from, JID_FULL);
-
-			jid_destroy(&output->to);*/
+			route_iq(room, chunk);
 			break;
 	}
 }
