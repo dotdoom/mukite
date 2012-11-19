@@ -11,55 +11,42 @@ BOOL jid_struct(BufferPtr *jid_string, Jid *jid_struct) {
 		*current = jid_string->data;
 
 	memset(jid_struct, 0, sizeof(*jid_struct));
-	jid_struct->resource.end = jid_string->end;
 	for (; current < jid_string->end; ++current) {
-		switch (part) {
-			case JID_NODE:
-				if (*current == '@') {
-					jid_struct->node.data = part_start;
-					jid_struct->node.end = current;
-					part = JID_HOST;
-					part_start = current+1;
-					break;
-				}
-				// fallthrough
-			case JID_HOST:
-				if (*current == '/') {
-					jid_struct->host.data = part_start;
-					jid_struct->host.end = current;
-					part = JID_RESOURCE;
-					part_start = current+1;
-				}
-				break;
-			case JID_RESOURCE:
-				// FIXME(artem): optimization for longer resources
-				break;
+		if (part == JID_NODE && *current == '@') {
+			jid_struct->node.data = part_start;
+			jid_struct->node.end = current;
+			part = JID_HOST;
+			part_start = current+1;
+		} else if (*current == '/') {
+			jid_struct->host.data = part_start;
+			jid_struct->host.end = current;
+			part = JID_RESOURCE;
+			part_start = current+1;
+			current = jid_string->end;
+			break;
 		}
 	}
 
-	switch (part) {
-		case JID_NODE:
-		case JID_HOST:
-			jid_struct->host.data = part_start;
-			jid_struct->host.end = current;
-			break;
-		case JID_RESOURCE:
-			jid_struct->resource.data = part_start;
-			break;
+	if (part == JID_RESOURCE) {
+		jid_struct->resource.data = part_start;
+		jid_struct->resource.end = current;
+	} else {
+		jid_struct->host.data = part_start;
+		jid_struct->host.end = current;
 	}
 
 	if (!jid_struct->host.data ||
 			(BPT_SIZE(&jid_struct->host) > MAX_JID_PART_SIZE) ||
 			(BPT_SIZE(&jid_struct->node) > MAX_JID_PART_SIZE) ||
-			(jid_struct->resource.data && BPT_SIZE(&jid_struct->resource) > MAX_JID_PART_SIZE)) {
+			(BPT_SIZE(&jid_struct->resource) > MAX_JID_PART_SIZE)) {
 		return FALSE;
 	}
 
 	LDEBUG("split the JID '%.*s': node '%.*s', host '%.*s', resource '%.*s'",
 			JID_LEN(jid_struct), JID_STR(jid_struct),
-			jid_struct->node.data ? BPT_SIZE(&jid_struct->node) : 0, jid_struct->node.data,
+			BPT_EMPTY(&jid_struct->node) ? 0 : BPT_SIZE(&jid_struct->node), jid_struct->node.data,
 			BPT_SIZE(&jid_struct->host), jid_struct->host.data,
-			jid_struct->resource.data ? BPT_SIZE(&jid_struct->resource) : 0, jid_struct->resource.data);
+			BPT_EMPTY(&jid_struct->resource) ? 0 : BPT_SIZE(&jid_struct->resource), jid_struct->resource.data);
 
 	return TRUE;
 }
@@ -105,7 +92,7 @@ int jid_cmp(Jid *jid1, Jid *jid2, int mode) {
 
 	if ((mode & JID_RESOURCE) && (jid1->resource.data || !(mode & JID_CMP_NULLWC))) {
 		if (!jid1->resource.data || !jid2->resource.data) {
-			LDEBUG("resources differ");
+			LDEBUG("resources may differ (WC)");
 			return jid1->resource.data != jid2->resource.data;
 		}
 

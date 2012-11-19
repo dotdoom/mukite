@@ -28,7 +28,9 @@ BOOL jid_serialize(Jid *, FILE *);
 BOOL jid_deserialize(Jid *, FILE *);
 
 #define JID_STR(jid) ((jid)->node.data ? (jid)->node.data : (jid)->host.data)
-#define JID_LEN(jid) ((int)((jid)->resource.end - JID_STR(jid)))
+#define JID_LEN(jid) ((int)( \
+			(BPT_EMPTY(&(jid)->resource) ? (jid)->host.end : (jid)->resource.end) - \
+			JID_STR(jid)))
 #define JID_EMPTY(jid) (!(jid)->host.data)
 
 #endif

@@ -193,12 +193,19 @@ ParticipantEntry *room_participant_by_nick(Room *room, BufferPtr *nick) {
 
 ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid) {
 	ParticipantEntry *current = room->participants;
+	int mode = JID_FULL;
 
-	LDEBUG("finding rJID '%.*s' in room '%.*s'",
+	if (BPT_EMPTY(&jid->resource)) {
+		// it is possible that <iq> (e.g. vCard) come with no resource.
+		// We should still be able to find that participant.
+		mode = JID_NODE | JID_HOST;
+	}
+
+	LDEBUG("finding rJID '%.*s' in room '%.*s', mode %d",
 			JID_LEN(jid), JID_STR(jid),
-			room->node.size, room->node.data);
+			room->node.size, room->node.data, mode);
 	for (; current; current = current->next) {
-		if (!jid_cmp(&current->jid, jid, JID_FULL)) {
+		if (!jid_cmp(&current->jid, jid, mode)) {
 			return current;
 		}
 	}
@@ -471,12 +478,11 @@ void route_presence(Room *room, RouterChunk *chunk) {
 			}
 
 			if (ingress->type == 'u') {
-				// TODO(artem): check how ejabberd handles this
+				// TODO(artem): always initiate room leaving procedure in this case (mimic ejabberd)
 				return;
 			}
 
 			// TODO(artem): check globally registered nickname
-			// TODO(artem): optimization, when moving to a separate proc
 
 			egress->from_nick = sender->nick;
 			egress->participant.affiliation = sender->affiliation;
@@ -515,7 +521,7 @@ void route_presence(Room *room, RouterChunk *chunk) {
 			return;
 		}
 
-		// TODO(artem): check global registered nickname
+		// TODO(artem): check globally registered nickname
 		// TODO(artem): check password
 		// TODO(artem): load room history as requested
 
@@ -534,7 +540,7 @@ void route_presence(Room *room, RouterChunk *chunk) {
 				room->owners = affiliation_entry;
 			}
 			affiliation = room_get_affiliation(room, &ingress->real_from);
-			if (affiliation < AFFIL_NONE) {
+			if (affiliation == AFFIL_OUTCAST) {
 				// TODO(artem): show the reason of being banned?
 				router_error(chunk, &error_definitions[ERROR_BANNED]);
 				return;
@@ -590,11 +596,44 @@ void route_presence(Room *room, RouterChunk *chunk) {
 void route_iq(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
-//	ParticipantEntry *sender = 0;
-	BufferPtr buffer = ingress->inner, node = buffer;
+	ParticipantEntry *sender = 0, *receiver = 0;
+	BufferPtr buffer, node;
 	Buffer node_name;
 	XmlAttr xmlns_attr;
 	BOOL xmlns_found;
+
+	sender = room_participant_by_jid(room, &ingress->real_from);
+	if (!BUF_EMPTY(&ingress->proxy_to.resource)) {
+		// iq directed to participant - just proxying
+		// TODO(artem): reject if not allowed by room policy
+		if (!sender) {
+			// TODO(artem): reply with a proper error message
+			return;
+		}
+		if (!(receiver = room_participant_by_nick(room, &ingress->proxy_to.resource))) {
+			// TODO(artem): reply with a proper error message
+			return;
+		}
+
+		router_cleanup(ingress);
+
+		egress->from_nick = sender->nick;
+		egress->user_data = ingress->inner;
+		egress->to = receiver->jid;
+
+		// special routing for vcard request - 'to' should not contain resource
+		if (ingress->type == 'g') {
+			buffer = ingress->inner;
+			if (xmlfsm_node_name(&buffer, &node_name) == XMLPARSE_SUCCESS) {
+				if (BUF_EQ_LIT("vCard", &node_name)) {
+					BPT_INIT(&egress->to.resource);
+				}
+			}
+		}
+
+		chunk->send.proc(chunk->send.data);
+		return;
+	}
 
 	egress->type = 'r';
 	jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
@@ -604,6 +643,7 @@ void route_iq(Room *room, RouterChunk *chunk) {
 	} else {*/
 
 	if (ingress->type == 'g') {
+		node = buffer = ingress->inner;
 		for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
 				node.data = buffer.data) {
 			node.end = buffer.data;
@@ -629,6 +669,10 @@ void route_iq(Room *room, RouterChunk *chunk) {
 				} else if (BPT_EQ_LIT("http://jabber.org/protocol/disco#items", &xmlns_attr.value)) {
 					egress->iq_type = BUILD_IQ_ROOM_DISCO_ITEMS;
 					egress->room = room;
+				} else if (BPT_EQ_LIT("http://jabber.org/protocol/muc#admin", &xmlns_attr.value)) {
+					while (xmlfsm_get_attr(&node, &xmlns_attr) == XMLPARSE_SUCCESS)
+						;
+					// TODO(artem): here!
 				}
 			}
 

@@ -34,7 +34,7 @@ typedef struct {
 #define BPT_SIZE(bptr) \
 	((int)((bptr)->end - (bptr)->data))
 #define BPT_EMPTY(bptr) \
-	(!(b)->data)
+	(!(bptr)->data)
 #define BPT_EQ_LIT(literal, bptr) \
 	(sizeof(literal)-1 == BPT_SIZE(bptr) && \
 	 !memcmp((literal), (bptr)->data, sizeof(literal)-1))

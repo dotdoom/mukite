@@ -62,7 +62,7 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 	char code_str[3];
 
 	BUF_PUSH_LITERAL("<x xmlns='http://jabber.org/protocol/muc#user'><item affiliation='");
-	BUF_PUSH(affiliations[node->affiliation+1], affiliation_sizes[node->affiliation+1]);
+	BUF_PUSH(affiliations[node->affiliation], affiliation_sizes[node->affiliation]);
 	BUF_PUSH_LITERAL("' role='");
 	BUF_PUSH(roles[node->role], role_sizes[node->role]);
 	if (node->jid) {
@@ -151,6 +151,8 @@ BOOL build_room_info(BuilderBuffer *buffer, Room *room, Buffer *host) {
 		"<feature var='muc_semianonymous'/>"
 		"<feature var='muc_moderated'/>"
 		"<feature var='muc_unsecured'/>"
+
+		See: http://xmpp.org/extensions/xep-0045.html#registrar-features
 	*/
 
 	return TRUE;
@@ -245,98 +247,89 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 		}
 	}
 
-	if (!packet->header.data &&
-			!packet->user_data.data &&
-			(packet->name == 'p')) {
-		BUF_PUSH_LITERAL("'/>");
-	} else {
-		BUF_PUSH_LITERAL("'>");
+	BUF_PUSH_LITERAL("'>");
+	BUF_PUSH_IFBPT(packet->user_data);
 
-		BUF_PUSH_IFBPT(packet->user_data);
-		if (packet->type == 'e') {
-			if (!build_error(packet->error, buffer)) {
+	if (packet->type == 'e') {
+		if (!build_error(packet->error, buffer)) {
+			return FALSE;
+		}
+	} else {
+		if (packet->name == 'p') {
+			if (!build_presence_mucadm(&packet->participant, buffer)) {
 				return FALSE;
 			}
-		} else {
-			switch (packet->name) {
-				case 'p':
-					if (!build_presence_mucadm(&packet->participant, buffer)) {
-						return FALSE;
-					}
+		} else if (packet->name == 'i') {
+			switch (packet->iq_type) {
+				case BUILD_IQ_VERSION:
+					BUF_PUSH_LITERAL(
+							"<query xmlns='jabber:iq:version'>"
+								"<name>Mukite http://mukite.org/</name>"
+								"<version>git</version>"
+								"<os>Windows-XP 5.01.2600</os>"
+							"</query>");
 					break;
-				case 'i':
-					switch (packet->iq_type) {
-						case BUILD_IQ_VERSION:
-							BUF_PUSH_LITERAL(
-									"<query xmlns='jabber:iq:version'>"
-										"<name>Mukite http://mukite.org/</name>"
-										"<version>git</version>"
-										"<os>Windows-XP 5.01.2600</os>"
-									"</query>");
-							break;
-						case BUILD_IQ_LAST:
-							BUF_PUSH_LITERAL("<query xmlns='jabber:iq:last' seconds='");
-							// We assume buffer is always large enough to hold int64
-							buffer->data_end += sprintf(buffer->data_end, "%.0f", packet->iq_last.seconds);
-							BUF_PUSH_LITERAL("'/>");
-							break;
-						case BUILD_IQ_TIME:
-							BUF_PUSH_LITERAL("<time xmlns='xmpp:urn:time'><tzo>");
-							BUF_PUSH_STR(packet->iq_time.tzo);
-							BUF_PUSH_LITERAL("</tzo><utc>");
-							BUF_PUSH_STR(packet->iq_time.utc);
-							BUF_PUSH_LITERAL("</utc></time>");
-							break;
-						case BUILD_IQ_DISCO_INFO:
-							BUF_PUSH_LITERAL(
-									"<query xmlns='http://jabber.org/protocol/disco#info'>"
-										"<identity category='conference' type='text' name='Mukite Chatrooms'/>"
-										"<identity category='directory' type='chatroom' name='Mukite Chatrooms'/>"
-										"<feature var='http://jabber.org/protocol/disco#info'/>"
-										"<feature var='http://jabber.org/protocol/disco#items'/>"
-										"<feature var='http://jabber.org/protocol/muc'/>"
-										"<feature var='jabber:iq:register'/>"
-										"<feature var='jabber:iq:last'/>"
-										"<feature var='jabber:iq:version'/>"
-										"<feature var='xmpp:urn:time'/>"
-									"</query>");
-							break;
-						case BUILD_IQ_DISCO_ITEMS:
-							BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#items'>");
-							if (!build_component_items(buffer, packet->rooms, &packet->from_host)) {
-								return FALSE;
-							}
-							BUF_PUSH_LITERAL("</query>");
-							break;
-						case BUILD_IQ_ROOM_DISCO_INFO:
-							BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#info'>");
-							if (!build_room_info(buffer, packet->room, &packet->from_host)) {
-								return FALSE;
-							}
-							BUF_PUSH_LITERAL("</query>");
-							break;
-						case BUILD_IQ_ROOM_DISCO_ITEMS:
-							BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#items'>");
-							if (!build_room_items(buffer, packet->room, &packet->from_host)) {
-								return FALSE;
-							}
-							BUF_PUSH_LITERAL("</query>");
-							break;
+				case BUILD_IQ_LAST:
+					BUF_PUSH_LITERAL("<query xmlns='jabber:iq:last' seconds='");
+					// We assume buffer is always large enough to hold int64
+					buffer->data_end += sprintf(buffer->data_end, "%.0f", packet->iq_last.seconds);
+					BUF_PUSH_LITERAL("'/>");
+					break;
+				case BUILD_IQ_TIME:
+					BUF_PUSH_LITERAL("<time xmlns='xmpp:urn:time'><tzo>");
+					BUF_PUSH_STR(packet->iq_time.tzo);
+					BUF_PUSH_LITERAL("</tzo><utc>");
+					BUF_PUSH_STR(packet->iq_time.utc);
+					BUF_PUSH_LITERAL("</utc></time>");
+					break;
+				case BUILD_IQ_DISCO_INFO:
+				case BUILD_IQ_ROOM_DISCO_INFO:
+					BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#info'>");
+					if (packet->iq_type > BUILD_IQ_ROOM) {
+						if (!build_room_info(buffer, packet->room, &packet->from_host)) {
+							return FALSE;
+						}
+					} else {
+						BUF_PUSH_LITERAL(
+								"<identity category='conference' type='text' name='Chatrooms'/>"
+								"<feature var='http://jabber.org/protocol/disco#info'/>"
+								"<feature var='http://jabber.org/protocol/disco#items'/>"
+								"<feature var='http://jabber.org/protocol/muc'/>"
+								"<feature var='jabber:iq:register'/>"
+								"<feature var='jabber:iq:last'/>"
+								"<feature var='jabber:iq:version'/>"
+								"<feature var='xmpp:urn:time'/>");
 					}
+					BUF_PUSH_LITERAL("</query>");
+					break;
+				case BUILD_IQ_DISCO_ITEMS:
+				case BUILD_IQ_ROOM_DISCO_ITEMS:
+					BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#items'>");
+					if (packet->iq_type > BUILD_IQ_ROOM) {
+						if (!build_room_items(buffer, packet->room, &packet->from_host)) {
+							return FALSE;
+						}
+					} else {
+						if (!build_component_items(buffer, packet->rooms, &packet->from_host)) {
+							return FALSE;
+						}
+					}
+					BUF_PUSH_LITERAL("</query>");
 					break;
 			}
 		}
-		switch (packet->name) {
-			case 'm':
-				BUF_PUSH_LITERAL("</message>");
-				break;
-			case 'p':
-				BUF_PUSH_LITERAL("</presence>");
-				break;
-			case 'i':
-				BUF_PUSH_LITERAL("</iq>");
-				break;
-		}
+	}
+
+	switch (packet->name) {
+		case 'm':
+			BUF_PUSH_LITERAL("</message>");
+			break;
+		case 'p':
+			BUF_PUSH_LITERAL("</presence>");
+			break;
+		case 'i':
+			BUF_PUSH_LITERAL("</iq>");
+			break;
 	}
 
 	return TRUE;

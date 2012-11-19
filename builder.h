@@ -27,10 +27,15 @@ typedef struct {
 #define BUILD_IQ_LAST 2
 #define BUILD_IQ_TIME 3
 #define BUILD_IQ_STATS 4
-#define BUILD_IQ_DISCO_INFO 10
-#define BUILD_IQ_DISCO_ITEMS 11
-#define BUILD_IQ_ROOM_DISCO_INFO 20
-#define BUILD_IQ_ROOM_DISCO_ITEMS 21
+
+
+#define BUILD_IQ_DISCO_INFO 11
+#define BUILD_IQ_DISCO_ITEMS 12
+
+#define BUILD_IQ_ROOM 20
+#define BUILD_IQ_ROOM_DISCO_INFO 21
+#define BUILD_IQ_ROOM_DISCO_ITEMS 22
+#define BUILD_IQ_ROOM_AFFILIATIONS 23
 
 typedef struct {
 	Buffer from_node, from_host, from_nick;
@@ -43,17 +48,34 @@ typedef struct {
 
 	BufferPtr header, user_data;
 	union {
-		MucAdmNode participant;
+		// type='error'
 		XMPPError *error;
+
+		// <presence>
+		MucAdmNode participant;
+
+		// iq_type = BUILD_IQ_ROOM_DISCO_*
 		Room *room;
+		
+		// iq_type = BUILD_IQ_LAST
 		struct {
 			double seconds;
 		} iq_last;
+		
+		// iq_type = BUILD_IQ_TIME
 		struct {
 			char tzo[10];
 			char utc[20];
 		} iq_time;
+
+		// iq_type = BUILD_IQ_DISCO_*
 		Rooms *rooms;
+
+		// iq_type = BUILD_IQ_ROOM_AFFILIATIONS
+		struct {
+			int affiliation;
+			AffiliationEntry *affiliations;
+		} muc_items;
 	};
 } BuilderPacket;
 
