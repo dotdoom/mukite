@@ -24,11 +24,11 @@ static XMPPError error_definitions[] = {
 		.type = "modify",
 		.text = "Only participants are allowed to send messages to this conference"
 	}, {
-#define ERROR_PARTICIPANT_NOT_IN_ROOM 1
+#define ERROR_RECIPIENT_NOT_IN_ROOM 1
 		.code = "404",
 		.name = "item-not-found",
 		.type = "cancel",
-		.text = "Participant is not in the conference room"
+		.text = "Recipient is not in the conference room"
 	}, {
 #define ERROR_NO_VISITORS_PM 2
 		.code = "403",
@@ -65,6 +65,18 @@ static XMPPError error_definitions[] = {
 		.name = "forbidden",
 		.type = "cancel",
 		.text = "Only members are allowed to enter this room"
+	}, {
+#define ERROR_EXTERNAL_IQ 8
+		.code = "406",
+		.name = "not-acceptable",
+		.type = "modify",
+		.text = "Only occupants are allowed to send queries to the conference"
+	}, {
+#define ERROR_IQ_PROHIBITED 9
+		.code = "405",
+		.name = "not-allowed",
+		.type = "cancel",
+		.text = "Queries to the conference occupants are not allowed in this room"
 	}
 };
 
@@ -431,7 +443,7 @@ void route_message(Room *room, RouterChunk *chunk) {
 	egress->user_data = ingress->inner;
 	if (ingress->type == 'c') {
 		if (!(receiver = room_participant_by_nick(room, &ingress->proxy_to.resource))) {
-			router_error(chunk, &error_definitions[ERROR_PARTICIPANT_NOT_IN_ROOM]);
+			router_error(chunk, &error_definitions[ERROR_RECIPIENT_NOT_IN_ROOM]);
 			return;
 		}
 
@@ -605,13 +617,16 @@ void route_iq(Room *room, RouterChunk *chunk) {
 	sender = room_participant_by_jid(room, &ingress->real_from);
 	if (!BUF_EMPTY(&ingress->proxy_to.resource)) {
 		// iq directed to participant - just proxying
-		// TODO(artem): reject if not allowed by room policy
 		if (!sender) {
-			// TODO(artem): reply with a proper error message
+			router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
+			return;
+		}
+		if ((room->flags & MUC_FLAG_IQ_PROXY) != MUC_FLAG_IQ_PROXY) {
+			router_error(chunk, &error_definitions[ERROR_IQ_PROHIBITED]);
 			return;
 		}
 		if (!(receiver = room_participant_by_nick(room, &ingress->proxy_to.resource))) {
-			// TODO(artem): reply with a proper error message
+			router_error(chunk, &error_definitions[ERROR_RECIPIENT_NOT_IN_ROOM]);
 			return;
 		}
 
@@ -638,9 +653,6 @@ void route_iq(Room *room, RouterChunk *chunk) {
 	egress->type = 'r';
 	jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
 	router_cleanup(ingress);
-
-/*	if ((sender = room_participant_by_jid(room, &egress->to))) {
-	} else {*/
 
 	if (ingress->type == 'g') {
 		node = buffer = ingress->inner;
