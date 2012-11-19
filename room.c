@@ -248,6 +248,7 @@ BOOL participants_serialize(ParticipantEntry *list, FILE *output) {
 	SERIALIZE_LIST(
 		jid_serialize(&list->jid, output) &&
 		buffer_serialize(&list->nick, output) &&
+		buffer_ptr_serialize(&list->presence, output) &&
 		SERIALIZE_BASE(list->affiliation) &&
 		SERIALIZE_BASE(list->role)
 	)
@@ -261,6 +262,7 @@ BOOL participants_deserialize(Room *room, FILE *input, int limit) {
 	DESERIALIZE_LIST(
 		jid_deserialize(&new_entry->jid, input) &&
 		buffer_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE) &&
+		buffer_ptr_deserialize(&new_entry->presence, input, PRESENCE_SIZE_LIMIT) &&
 		DESERIALIZE_BASE(new_entry->affiliation) &&
 		DESERIALIZE_BASE(new_entry->role),
 

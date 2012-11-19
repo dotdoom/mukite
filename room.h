@@ -23,6 +23,7 @@
 #define USER_STRING_OPTION_LIMIT 4096
 #define PARTICIPANTS_LIMIT 1024
 #define AFFILIATION_LIST_LIMIT 4096
+#define PRESENCE_SIZE_LIMIT 65535
 
 typedef struct AffiliationEntry {
 	Jid jid;

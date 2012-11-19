@@ -1,6 +1,8 @@
 #ifndef SERIALIZER_H
 #define SERIALIZER_H
 
+#include <string.h>
+
 #define SERIALIZE_BASE(value) \
 	fwrite(&(value), sizeof(value), 1, output)
 
@@ -37,10 +39,11 @@
 			return FALSE; \
 		} \
 		new_entry = malloc(sizeof(*new_entry)); \
+		memset(new_entry, 0, sizeof(*new_entry)); \
 		if (!(properties) || !DESERIALIZE_BASE(new_entry->next)) { \
 			LERROR("deserializer: cannot read list item"); \
 			free(new_entry); \
-			return FALSE; /* TODO: rollback? */ \
+			return FALSE; \
 		} \
 		if (*list) { \
 			(*list)->next = new_entry; \
