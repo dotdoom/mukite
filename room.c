@@ -77,6 +77,12 @@ static XMPPError error_definitions[] = {
 		.name = "not-allowed",
 		.type = "cancel",
 		.text = "Queries to the conference occupants are not allowed in this room"
+	}, {
+#define ERROR_IQ_BAD 10
+		.code = "400",
+		.name = "bad-request",
+		.type = "modify",
+		.text = ""
 	}
 };
 
@@ -537,19 +543,19 @@ void route_presence(Room *room, RouterChunk *chunk) {
 		// TODO(artem): check password
 		// TODO(artem): load room history as requested
 
+		if (!room->participants && (room->flags & MUC_FLAG_PERSISTENTROOM) != MUC_FLAG_PERSISTENTROOM) {
+			// This is empty non-persistent room => thus it has just been created
+			affiliation_entry = malloc(sizeof(*affiliation_entry));
+			memset(affiliation_entry, 0, sizeof(*affiliation_entry));
+			jid_cpy(&affiliation_entry->jid, &ingress->real_from, JID_NODE | JID_HOST);
+			room->owners = affiliation_entry;
+		}
 		if ((acl_role(chunk->acl, &ingress->real_from) & ACL_MUC_ADMIN) == ACL_MUC_ADMIN) {
 			affiliation = AFFIL_OWNER;
 		} else {
 			if (room->participants_count >= room->max_participants) {
 				router_error(chunk, &error_definitions[ERROR_OCCUPANTS_LIMIT]);
 				return;
-			}
-			if (!room->participants && (room->flags & MUC_FLAG_PERSISTENTROOM) != MUC_FLAG_PERSISTENTROOM) {
-				// This is empty non-persistent room => thus it has just been created
-				affiliation_entry = malloc(sizeof(*affiliation_entry));
-				memset(affiliation_entry, 0, sizeof(*affiliation_entry));
-				jid_cpy(&affiliation_entry->jid, &ingress->real_from, JID_NODE | JID_HOST);
-				room->owners = affiliation_entry;
 			}
 			affiliation = room_get_affiliation(room, &ingress->real_from);
 			if (affiliation == AFFIL_OUTCAST) {
@@ -609,13 +615,16 @@ void route_iq(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
 	ParticipantEntry *sender = 0, *receiver = 0;
-	BufferPtr buffer, node;
+
+	BufferPtr buffer, node, node_attr_value = BPT_INITIALIZER;
 	Buffer node_name;
-	XmlAttr xmlns_attr;
-	BOOL xmlns_found;
+	XmlAttr node_attr;
+	int attr_state;
 
 	sender = room_participant_by_jid(room, &ingress->real_from);
 	if (!BUF_EMPTY(&ingress->proxy_to.resource)) {
+		LDEBUG("trying to use iq proxy to forward the stanza");
+
 		// iq directed to participant - just proxying
 		if (!sender) {
 			router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
@@ -651,51 +660,111 @@ void route_iq(Room *room, RouterChunk *chunk) {
 	}
 
 	egress->type = 'r';
-	jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
-	router_cleanup(ingress);
+
+	// first find <query> node and it's xmlns
+	node = buffer = ingress->inner;
+	for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
+			node.data = buffer.data) {
+		node.end = buffer.data;
+		xmlfsm_node_name(&node, &node_name);
+
+		if (!BUF_EQ_LIT("query", &node_name)) {
+			continue;
+		}
+
+		while ((attr_state = xmlfsm_get_attr(&node, &node_attr)) == XMLPARSE_SUCCESS) {
+			if (BPT_EQ_LIT("xmlns", &node_attr.name)) {
+				node_attr_value = node_attr.value;
+				// ...but read all attributes to the end
+			}
+		}
+
+		if (!BPT_EMPTY(&node_attr_value)) {
+			break;
+		}
+	}
+
+	// node = <query>'s inner XML
+	// node_attr_value = node's xmlns' attribute value
+
+	if (BPT_EMPTY(&node_attr_value)) {
+		router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+		return;
+	}
 
 	if (ingress->type == 'g') {
-		node = buffer = ingress->inner;
-		for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
-				node.data = buffer.data) {
-			node.end = buffer.data;
-			xmlfsm_node_name(&node, &node_name);
+		LDEBUG("received iq:get, xmlns '%.*s'", BPT_SIZE(&node_attr_value), node_attr_value.data);
 
-			xmlns_found = FALSE;
-			while (xmlfsm_get_attr(&node, &xmlns_attr) == XMLPARSE_SUCCESS) {
-				if (BPT_EQ_LIT("xmlns", &xmlns_attr.name)) {
-					xmlns_found = TRUE;
+		if (BPT_EQ_LIT("http://jabber.org/protocol/disco#info", &node_attr_value)) {
+			egress->iq_type = BUILD_IQ_ROOM_DISCO_INFO;
+			egress->room = room;
+		} else if (BPT_EQ_LIT("http://jabber.org/protocol/disco#items", &node_attr_value)) {
+			egress->iq_type = BUILD_IQ_ROOM_DISCO_ITEMS;
+			egress->room = room;
+		} else if (BPT_EQ_LIT("http://jabber.org/protocol/muc#admin", &node_attr_value)) {
+			if (attr_state == XMLNODE_EMPTY) {
+				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+				return;
+			}
+
+			buffer = node;
+			BPT_INIT(&node_attr_value);
+			for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
+					node.data = buffer.data) {
+				node.end = buffer.data;
+				xmlfsm_node_name(&node, &node_name);
+
+				if (!BUF_EQ_LIT("item", &node_name)) {
+					continue;
+				}
+
+				while ((attr_state = xmlfsm_get_attr(&node, &node_attr)) == XMLPARSE_SUCCESS) {
+					if (BPT_EQ_LIT("affiliation", &node_attr.name)) {
+						node_attr_value = node_attr.value;
+						break;
+					}
+				}
+
+				if (!BPT_EMPTY(&node_attr_value)) {
 					break;
 				}
 			}
 
-			if (!xmlns_found) {
-				// No use of <query> without xmlns="..."
-				continue;
+			LDEBUG("got muc#admin request for affiliation = '%.*s'",
+					BPT_SIZE(&node_attr_value), node_attr_value.data);
+
+			if (BPT_EMPTY(&node_attr_value)) {
+				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+				return;
 			}
 
-			if (BUF_EQ_LIT("query", &node_name)) {
-				if (BPT_EQ_LIT("http://jabber.org/protocol/disco#info", &xmlns_attr.value)) {
-					egress->iq_type = BUILD_IQ_ROOM_DISCO_INFO;
-					egress->room = room;
-				} else if (BPT_EQ_LIT("http://jabber.org/protocol/disco#items", &xmlns_attr.value)) {
-					egress->iq_type = BUILD_IQ_ROOM_DISCO_ITEMS;
-					egress->room = room;
-				} else if (BPT_EQ_LIT("http://jabber.org/protocol/muc#admin", &xmlns_attr.value)) {
-					while (xmlfsm_get_attr(&node, &xmlns_attr) == XMLPARSE_SUCCESS)
-						;
-					// TODO(artem): here!
-				}
-			}
-
-			if (egress->iq_type) {
-				chunk->send.proc(chunk->send.data);
-				break;
+			egress->iq_type = BUILD_IQ_ROOM_AFFILIATIONS;
+			if (BPT_EQ_LIT("outcast", &node_attr_value)) {
+				egress->muc_items.affiliation = AFFIL_OUTCAST;
+				egress->muc_items.items = room->outcasts;
+			} else if (BPT_EQ_LIT("member", &node_attr_value)) {
+				egress->muc_items.affiliation = AFFIL_MEMBER;
+				egress->muc_items.items = room->members;
+			} else if (BPT_EQ_LIT("admin", &node_attr_value)) {
+				egress->muc_items.affiliation = AFFIL_ADMIN;
+				egress->muc_items.items = room->admins;
+			} else if (BPT_EQ_LIT("owner", &node_attr_value)) {
+				egress->muc_items.affiliation = AFFIL_OWNER;
+				egress->muc_items.items = room->owners;
+			} else {
+				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+				return;
 			}
 		}
-	}
 
-	jid_destroy(&egress->to);
+	}	
+
+	if (egress->iq_type) {
+		jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
+		router_cleanup(ingress);
+		chunk->send.proc(chunk->send.data);
+		jid_destroy(&egress->to);
+	}
 }
 
 void room_route(Room *room, RouterChunk *chunk) {

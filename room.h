@@ -73,8 +73,7 @@ typedef struct Room {
 	int max_participants;
 	int _unused[16];
 
-	ParticipantEntry
-		*participants;
+	ParticipantEntry *participants;
 	int participants_count;
 
 	AffiliationEntry

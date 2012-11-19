@@ -31,7 +31,7 @@
 #define BUF_PUSH_LITERAL(data) \
 	BUF_PUSH(data, sizeof(data)-1)
 
-static const char* affiliations[] = {
+static const char* affiliation_names[] = {
 	"outcast",
 	"none",
 	"member",
@@ -62,7 +62,7 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 	char code_str[3];
 
 	BUF_PUSH_LITERAL("<x xmlns='http://jabber.org/protocol/muc#user'><item affiliation='");
-	BUF_PUSH(affiliations[node->affiliation], affiliation_sizes[node->affiliation]);
+	BUF_PUSH(affiliation_names[node->affiliation], affiliation_sizes[node->affiliation]);
 	BUF_PUSH_LITERAL("' role='");
 	BUF_PUSH(roles[node->role], role_sizes[node->role]);
 	if (node->jid) {
@@ -177,6 +177,26 @@ BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 		BUF_PUSH_LITERAL("@");
 		BUF_PUSH_BUF(*host);
 		BUF_PUSH_LITERAL("'/>");
+	}
+
+	return TRUE;
+}
+
+BOOL build_room_affiliations(BuilderBuffer *buffer, AffiliationEntry *aff, int affiliation) {
+	int chunk_size;
+
+	for (; aff; aff = aff->next) {
+		BUF_PUSH_LITERAL("<item affiliation='");
+		BUF_PUSH_STR(affiliation_names[affiliation]);
+		BUF_PUSH_LITERAL("' jid='");
+		BUF_PUSH(JID_STR(&aff->jid), JID_LEN(&aff->jid));
+		if (!BUF_EMPTY(&aff->reason)) {
+			BUF_PUSH_LITERAL("'><reason>");
+			BUF_PUSH_BUF(aff->reason);
+			BUF_PUSH_LITERAL("</reason></item>");
+		} else {
+			BUF_PUSH_LITERAL("'><reason/></item>");
+		}
 	}
 
 	return TRUE;
@@ -313,6 +333,13 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 						if (!build_component_items(buffer, packet->rooms, &packet->from_host)) {
 							return FALSE;
 						}
+					}
+					BUF_PUSH_LITERAL("</query>");
+					break;
+				case BUILD_IQ_ROOM_AFFILIATIONS:
+					BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/muc#admin'>");
+					if (!build_room_affiliations(buffer, packet->muc_items.items, packet->muc_items.affiliation)) {
+						return FALSE;
 					}
 					BUF_PUSH_LITERAL("</query>");
 					break;

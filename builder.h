@@ -74,7 +74,7 @@ typedef struct {
 		// iq_type = BUILD_IQ_ROOM_AFFILIATIONS
 		struct {
 			int affiliation;
-			AffiliationEntry *affiliations;
+			AffiliationEntry *items;
 		} muc_items;
 	};
 } BuilderPacket;

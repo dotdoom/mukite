@@ -40,6 +40,7 @@ typedef struct {
 	 !memcmp((literal), (bptr)->data, sizeof(literal)-1))
 #define BPT_2_BUF(bptr) \
 	{ .data = (bptr)->data, .size = BPT_SIZE(bptr) }
+#define BPT_INITIALIZER { .data = 0, .end = 0 }
 
 BOOL buffer_ptr_serialize(BufferPtr *, FILE *);
 BOOL buffer_ptr_deserialize(BufferPtr *, FILE *, int);
