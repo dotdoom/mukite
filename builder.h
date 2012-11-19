@@ -61,13 +61,10 @@ typedef struct {
 		struct {
 			double seconds;
 		} iq_last;
-		
-		// iq_type = BUILD_IQ_TIME
-		struct {
-			char tzo[10];
-			char utc[20];
-		} iq_time;
 
+		// iq_type = BUILD_IQ_STATS
+		BufferPtr iq_stats_request;
+		
 		// iq_type = BUILD_IQ_DISCO_*
 		Rooms *rooms;
 

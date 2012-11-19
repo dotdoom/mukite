@@ -59,8 +59,6 @@ void component_handle(RouterChunk *chunk) {
 	Buffer node_name;
 	XmlAttr xmlns_attr;
 	BOOL xmlns_found;
-	struct tm tm;
-	time_t tm_t;
 
 	if (ingress->name != 'i') {
 		// We do not handle <message> or <presence> to the nodeless JID
@@ -88,7 +86,7 @@ void component_handle(RouterChunk *chunk) {
 				}
 
 				if (!xmlns_found) {
-					// No use of <query> without xmlns="..."
+					// no use of <query> without xmlns="..."
 					continue;
 				}
 
@@ -99,7 +97,8 @@ void component_handle(RouterChunk *chunk) {
 						egress->iq_type = BUILD_IQ_LAST;
 						egress->iq_last.seconds = difftime(time(0), chunk->startup);
 					} else if (BPT_EQ_LIT("http://jabber.org/protocol/stats", &xmlns_attr.value)) {
-						//.iq_type = BUILD_IQ_STATS;
+						egress->iq_type = BUILD_IQ_STATS;
+						egress->iq_stats_request = node;
 					} else if (BPT_EQ_LIT("http://jabber.org/protocol/disco#info", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_DISCO_INFO;
 					} else if (BPT_EQ_LIT("http://jabber.org/protocol/disco#items", &xmlns_attr.value)) {
@@ -111,12 +110,6 @@ void component_handle(RouterChunk *chunk) {
 				if (BUF_EQ_LIT("time", &node_name) &&
 					BPT_EQ_LIT("urn:xmpp:time", &xmlns_attr.value)) {
 					egress->iq_type = BUILD_IQ_TIME;
-					time(&tm_t);
-					localtime_r(&tm_t, &tm);
-					strftime(egress->iq_time.tzo, sizeof(egress->iq_time.tzo), "%z", &tm);
-					gmtime_r(&tm_t, &tm);
-					strftime(egress->iq_time.utc, sizeof(egress->iq_time.utc), "%Y-%m-%dT%T", &tm);
-					strcat(egress->iq_time.utc, "Z");
 				}
 
 				if (egress->iq_type) {

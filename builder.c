@@ -202,6 +202,32 @@ BOOL build_room_affiliations(BuilderBuffer *buffer, AffiliationEntry *aff, int a
 	return TRUE;
 }
 
+BOOL build_iq_time(BuilderBuffer *buffer) {
+	struct tm tm;
+	time_t tm_t;
+	char str_buffer[40];
+	int chunk_size;
+
+	time(&tm_t);
+	localtime_r(&tm_t, &tm);
+	if (strftime(str_buffer, sizeof(str_buffer), "%z", &tm) == 5) {
+		// +0300 => +03:00
+		memcpy(str_buffer+4, str_buffer+3, 3);
+		str_buffer[3] = ':';
+	}
+
+	BUF_PUSH_LITERAL("<tzo>");
+	BUF_PUSH_STR(str_buffer);
+	BUF_PUSH_LITERAL("</tzo><utc>");
+
+	gmtime_r(&tm_t, &tm);
+	strftime(str_buffer, sizeof(str_buffer), "%Y-%m-%dT%T", &tm);
+
+	BUF_PUSH_STR(str_buffer);
+	BUF_PUSH_LITERAL("Z</utc>");
+	return TRUE;
+}
+
 BOOL build_error(XMPPError *error, BuilderBuffer *buffer) {
 	int chunk_size;
 
@@ -296,11 +322,11 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 					BUF_PUSH_LITERAL("'/>");
 					break;
 				case BUILD_IQ_TIME:
-					BUF_PUSH_LITERAL("<time xmlns='xmpp:urn:time'><tzo>");
-					BUF_PUSH_STR(packet->iq_time.tzo);
-					BUF_PUSH_LITERAL("</tzo><utc>");
-					BUF_PUSH_STR(packet->iq_time.utc);
-					BUF_PUSH_LITERAL("</utc></time>");
+					BUF_PUSH_LITERAL("<time xmlns='urn:xmpp:time'>");
+					if (!build_iq_time(buffer)) {
+						return FALSE;
+					}
+					BUF_PUSH_LITERAL("</time>");
 					break;
 				case BUILD_IQ_DISCO_INFO:
 				case BUILD_IQ_ROOM_DISCO_INFO:
@@ -318,7 +344,7 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 								"<feature var='jabber:iq:register'/>"
 								"<feature var='jabber:iq:last'/>"
 								"<feature var='jabber:iq:version'/>"
-								"<feature var='xmpp:urn:time'/>");
+								"<feature var='urn:xmpp:time'/>");
 					}
 					BUF_PUSH_LITERAL("</query>");
 					break;

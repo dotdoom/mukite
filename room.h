@@ -35,6 +35,7 @@ typedef struct ParticipantEntry {
 	Buffer nick;
 	int affiliation, role;
 	BufferPtr presence;
+	time_t last_message_time;
 	struct ParticipantEntry *prev, *next;
 } ParticipantEntry;
 

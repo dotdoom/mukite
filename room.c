@@ -83,6 +83,18 @@ static XMPPError error_definitions[] = {
 		.name = "bad-request",
 		.type = "modify",
 		.text = ""
+	}, {
+#define ERROR_PRIVILEGE_LEVEL 11
+		.code = "403",
+		.name = "forbidden",
+		.type = "cancel",
+		.text = "This kind of action requires higher privileges than you have"
+	}, {
+#define ERROR_TRAFFIC_RATE 12
+		.code = "500",
+		.name = "resource-constraint",
+		.type = "wait",
+		.text = "Traffic rate limit exceeded"
 	}
 };
 
@@ -436,6 +448,7 @@ void route_message(Room *room, RouterChunk *chunk) {
 	BuilderPacket *egress = &chunk->egress;
 	ParticipantEntry *sender = 0, *receiver = 0;
 
+
 	if (!(sender = room_participant_by_jid(room, &ingress->real_from))) {
 		router_error(chunk, &error_definitions[ERROR_EXTERNAL_MESSAGE]);
 		return;
@@ -469,7 +482,19 @@ void route_message(Room *room, RouterChunk *chunk) {
 			return;
 		}
 
+		/*now = time(0);
+		now_diff = difftime(now, sender->last_message.time);
+		if (now_diff < 0.0001) {
+			router_error(chunk, &error_definitions[ERROR_TRAFFIC_RATE]);
+			return;
+		}
+		if (sender->last_message.size / now_diff > 5) {
+			router_error(chunk, &error_definitions[ERROR_TRAFFIC_RATE]);
+			return;
+		}*/
+
 		router_cleanup(ingress);
+		//sender->last_message_time = now;
 		send_to_participants(egress, &chunk->send, room->participants, 1 << 30);
 	}
 }
@@ -707,6 +732,15 @@ void route_iq(Room *room, RouterChunk *chunk) {
 				return;
 			}
 
+			if (!sender) {
+				router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
+				return;
+			}
+			if (sender->affiliation < AFFIL_ADMIN) {
+				router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
+				return;
+			}
+
 			buffer = node;
 			BPT_INIT(&node_attr_value);
 			for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
@@ -756,8 +790,8 @@ void route_iq(Room *room, RouterChunk *chunk) {
 				return;
 			}
 		}
-
-	}	
+	} else if (ingress->type == 's') {
+	}
 
 	if (egress->iq_type) {
 		jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
