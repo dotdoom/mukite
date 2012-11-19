@@ -32,25 +32,27 @@
 		LDEBUG("deserializer: no items found for the list"); \
 		return TRUE; \
 	} \
-	*list = 0; \
+	*list = new_entry = 0; \
+	entry_count = 0; \
 	do { \
 		if (++entry_count > limit) { \
 			LERROR("deserializer: list size limit exceeded"); \
 			return FALSE; \
 		} \
-		new_entry = malloc(sizeof(*new_entry)); \
-		memset(new_entry, 0, sizeof(*new_entry)); \
+		if (new_entry) { \
+			new_entry->next = malloc(sizeof(*new_entry)); \
+			memset(new_entry->next, 0, sizeof(*new_entry)); \
+			backref; \
+			new_entry = new_entry->next; \
+		} else { \
+			*list = new_entry = malloc(sizeof(*new_entry)); \
+			memset(new_entry, 0, sizeof(*new_entry)); \
+		} \
 		if (!(properties) || !DESERIALIZE_BASE(new_entry->next)) { \
 			LERROR("deserializer: cannot read list item"); \
-			free(new_entry); \
 			return FALSE; \
 		} \
-		if (*list) { \
-			(*list)->next = new_entry; \
-		} \
-		backref; \
-		*list = new_entry; \
-	} while ((*list)->next); \
+	} while (new_entry->next); \
 	return TRUE;
 
 #endif

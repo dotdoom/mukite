@@ -266,8 +266,9 @@ BOOL participants_deserialize(Room *room, FILE *input, int limit) {
 		DESERIALIZE_BASE(new_entry->affiliation) &&
 		DESERIALIZE_BASE(new_entry->role),
 
-		++room->participants_count; new_entry->prev = *list
+		new_entry->next->prev = new_entry
 	)
+	room->participants_count = entry_count;
 }
 
 BOOL affiliations_serialize(AffiliationEntry *list, FILE *output) {

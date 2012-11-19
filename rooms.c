@@ -128,8 +128,8 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
 	}
 	DESERIALIZE_LIST(
 		room_deserialize(new_entry, input),
-		rooms->end = new_entry
 	)
+	rooms->end = new_entry;
 }
 
 void rooms_acquire(Room *room) {
