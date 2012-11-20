@@ -21,7 +21,6 @@
 			return FALSE; \
 		} \
 	} \
-	return TRUE;
 
 #define DESERIALIZE_LIST(properties, backref) \
 	if (!DESERIALIZE_BASE(*list)) { \
@@ -53,6 +52,5 @@
 			return FALSE; \
 		} \
 	} while (new_entry->next); \
-	return TRUE;
 
 #endif

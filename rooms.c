@@ -95,6 +95,7 @@ BOOL registered_nicks_serialize(RegisteredNick *list, FILE *output) {
 		jid_serialize(&list->jid, output) &&
 		buffer_serialize(&list->nick, output)
 	);
+	return TRUE;
 }
 
 BOOL registered_nicks_deserialize(RegisteredNick **list, FILE *input, int limit) {
@@ -105,6 +106,7 @@ BOOL registered_nicks_deserialize(RegisteredNick **list, FILE *input, int limit)
 		jid_deserialize(&new_entry->jid, input) &&
 		buffer_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE),
 	);
+	return TRUE;
 }
 
 BOOL rooms_serialize(Rooms *rooms, FILE *output) {
@@ -115,7 +117,8 @@ BOOL rooms_serialize(Rooms *rooms, FILE *output) {
 	}
 	SERIALIZE_LIST(
 		room_serialize(list, output)
-	)
+	);
+	return TRUE;
 }
 
 BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
@@ -128,8 +131,9 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
 	}
 	DESERIALIZE_LIST(
 		room_deserialize(new_entry, input),
-	)
+	);
 	rooms->end = new_entry;
+	return TRUE;
 }
 
 void rooms_acquire(Room *room) {

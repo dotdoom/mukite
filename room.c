@@ -251,7 +251,8 @@ BOOL participants_serialize(ParticipantEntry *list, FILE *output) {
 		buffer_ptr_serialize(&list->presence, output) &&
 		SERIALIZE_BASE(list->affiliation) &&
 		SERIALIZE_BASE(list->role)
-	)
+	);
+	return TRUE;
 }
 
 BOOL participants_deserialize(Room *room, FILE *input, int limit) {
@@ -267,8 +268,9 @@ BOOL participants_deserialize(Room *room, FILE *input, int limit) {
 		DESERIALIZE_BASE(new_entry->role),
 
 		new_entry->next->prev = new_entry
-	)
+	);
 	room->participants_count = entry_count;
+	return TRUE;
 }
 
 BOOL affiliations_serialize(AffiliationEntry *list, FILE *output) {
@@ -276,7 +278,8 @@ BOOL affiliations_serialize(AffiliationEntry *list, FILE *output) {
 	SERIALIZE_LIST(
 		jid_serialize(&list->jid, output) &&
 		buffer_serialize(&list->reason, output)
-	)
+	);
+	return TRUE;
 }
 
 BOOL affiliations_deserialize(AffiliationEntry **list, FILE *input, int limit) {
@@ -286,7 +289,8 @@ BOOL affiliations_deserialize(AffiliationEntry **list, FILE *input, int limit) {
 	DESERIALIZE_LIST(
 		jid_deserialize(&new_entry->jid, input) &&
 		buffer_deserialize(&new_entry->reason, input, MAX_JID_PART_SIZE),
-	)
+	);
+	return TRUE;
 }
 
 AffiliationEntry *affiliation_add(AffiliationEntry **list, Jid *jid, BufferPtr *reason) {
