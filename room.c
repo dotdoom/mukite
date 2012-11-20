@@ -172,6 +172,7 @@ int room_get_affiliation(Room *room, Jid *jid) {
 
 ParticipantEntry *room_join(Room *room, Jid *jid, BufferPtr *nick, int affiliation) {
 	ParticipantEntry *participant = malloc(sizeof(*participant));
+	memset(participant, 0, sizeof(*participant));
 
 	LDEBUG("'%.*s' is joining the room '%.*s' as '%.*s'",
 			JID_LEN(jid), JID_STR(jid),
