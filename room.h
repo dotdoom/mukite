@@ -13,12 +13,18 @@
 #define ROLE_PARTICIPANT 1
 #define ROLE_MODERATOR 2
 
-#define AFFIL_UNCHANGED -9
+extern const char* affiliation_names[];
+extern const int affiliation_name_sizes[];
+
+#define AFFIL_UNCHANGED -1
 #define AFFIL_OUTCAST 0
-#define AFFIL_NONE 1
-#define AFFIL_MEMBER 2
-#define AFFIL_ADMIN 3
-#define AFFIL_OWNER 4
+#define AFFIL_MEMBER 1
+#define AFFIL_ADMIN 2
+#define AFFIL_OWNER 3
+#define AFFIL_NONE 4
+
+extern const char* role_names[];
+extern const int role_name_sizes[];
 
 #define USER_STRING_OPTION_LIMIT 4096
 #define PARTICIPANTS_LIMIT 1024
@@ -78,11 +84,7 @@ typedef struct Room {
 	ParticipantEntry *participants;
 	int participants_count;
 
-	AffiliationEntry
-		*owners,
-		*admins,
-		*members,
-		*outcasts;
+	AffiliationEntry *affiliations[4];
 
 	struct Room *prev, *next;
 	pthread_mutex_t sync;

@@ -41,6 +41,8 @@ typedef struct {
 #define BPT_2_BUF(bptr) \
 	{ .data = (bptr)->data, .size = BPT_SIZE(bptr) }
 #define BPT_INITIALIZER { .data = 0, .end = 0 }
+#define BPT_EQ_BIN(bin, bptr, len) \
+	(BPT_SIZE(bptr) == (len) && !memcmp((bin), (bptr)->data, len))
 
 BOOL buffer_ptr_serialize(BufferPtr *, FILE *);
 BOOL buffer_ptr_deserialize(BufferPtr *, FILE *, int);

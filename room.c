@@ -7,6 +7,32 @@
 
 #include "room.h"
 
+const char* affiliation_names[] = {
+	"outcast",
+	"member",
+	"admin",
+	"owner",
+	"none"
+};
+const int affiliation_name_sizes[] = {
+	7,
+	6,
+	5,
+	5,
+	4
+};
+
+const char* role_names[] = {
+	"visitor",
+	"participant",
+	"moderator"
+};
+const int role_name_sizes[] = {
+	7,
+	11,
+	9
+};
+
 #define STATUS_NON_ANONYMOUS 100
 #define STATUS_SELF_PRESENCE 110
 #define STATUS_LOGGING_ENABLED 170
@@ -132,21 +158,12 @@ inline AffiliationEntry *find_affiliation(AffiliationEntry *entry, Jid *jid) {
 
 int room_get_affiliation(Room *room, Jid *jid) {
 	AffiliationEntry *entry = 0;
+	int affiliation;
 
-	if ((entry = find_affiliation(room->members, jid))) {
-		return AFFIL_MEMBER;
-	}
-
-	if ((entry = find_affiliation(room->outcasts, jid))) {
-		return AFFIL_OUTCAST;
-	}
-
-	if ((entry = find_affiliation(room->admins, jid))) {
-		return AFFIL_ADMIN;
-	}
-
-	if ((entry = find_affiliation(room->owners, jid))) {
-		return AFFIL_OWNER;
+	for (affiliation = AFFIL_OUTCAST; affiliation <= AFFIL_OWNER; ++affiliation) {
+		if ((entry = find_affiliation(room->affiliations[affiliation], jid))) {
+			return affiliation;
+		}
 	}
 
 	return AFFIL_NONE;
@@ -330,10 +347,10 @@ BOOL room_serialize(Room *room, FILE *output) {
 		SERIALIZE_BASE(room->_unused) &&
 
 		participants_serialize(room->participants, output) &&
-		affiliations_serialize(room->owners, output) &&
-		affiliations_serialize(room->admins, output) &&
-		affiliations_serialize(room->members, output) &&
-		affiliations_serialize(room->outcasts, output);
+		affiliations_serialize(room->affiliations[AFFIL_OWNER], output) &&
+		affiliations_serialize(room->affiliations[AFFIL_ADMIN], output) &&
+		affiliations_serialize(room->affiliations[AFFIL_MEMBER], output) &&
+		affiliations_serialize(room->affiliations[AFFIL_OUTCAST], output);
 }
 
 BOOL room_deserialize(Room *room, FILE *input) {
@@ -351,10 +368,10 @@ BOOL room_deserialize(Room *room, FILE *input) {
 		DESERIALIZE_BASE(room->_unused) &&
 
 		participants_deserialize(room, input, PARTICIPANTS_LIMIT) &&
-		affiliations_deserialize(&room->owners, input, AFFILIATION_LIST_LIMIT) &&
-		affiliations_deserialize(&room->admins, input, AFFILIATION_LIST_LIMIT) &&
-		affiliations_deserialize(&room->members, input, AFFILIATION_LIST_LIMIT) &&
-		affiliations_deserialize(&room->outcasts, input, AFFILIATION_LIST_LIMIT);
+		affiliations_deserialize(&room->affiliations[AFFIL_OWNER], input, AFFILIATION_LIST_LIMIT) &&
+		affiliations_deserialize(&room->affiliations[AFFIL_ADMIN], input, AFFILIATION_LIST_LIMIT) &&
+		affiliations_deserialize(&room->affiliations[AFFIL_MEMBER], input, AFFILIATION_LIST_LIMIT) &&
+		affiliations_deserialize(&room->affiliations[AFFIL_OUTCAST], input, AFFILIATION_LIST_LIMIT);
 }
 
 BOOL erase_muc_user_node(IncomingPacket *packet) {
@@ -580,7 +597,7 @@ void route_presence(Room *room, RouterChunk *chunk) {
 			affiliation_entry = malloc(sizeof(*affiliation_entry));
 			memset(affiliation_entry, 0, sizeof(*affiliation_entry));
 			jid_cpy(&affiliation_entry->jid, &ingress->real_from, JID_NODE | JID_HOST);
-			room->owners = affiliation_entry;
+			room->affiliations[AFFIL_OWNER] = affiliation_entry;
 		}
 		if ((acl_role(chunk->acl, &ingress->real_from) & ACL_MUC_ADMIN) == ACL_MUC_ADMIN) {
 			affiliation = AFFIL_OWNER;
@@ -596,7 +613,7 @@ void route_presence(Room *room, RouterChunk *chunk) {
 				return;
 			}
 			if ((room->flags & MUC_FLAG_MEMBERSONLY) == MUC_FLAG_MEMBERSONLY &&
-					affiliation < AFFIL_MEMBER) {
+					affiliation == AFFIL_NONE) {
 				router_error(chunk, &error_definitions[ERROR_MEMBERS_ONLY]);
 				return;
 			}
@@ -643,6 +660,17 @@ void route_presence(Room *room, RouterChunk *chunk) {
 	}
 }
 
+int affiliation_by_name(BufferPtr *name) {
+	int affiliation;
+
+	for (affiliation = AFFIL_OUTCAST; affiliation <= AFFIL_OWNER; ++affiliation) {
+		if (BPT_EQ_BIN(affiliation_names[affiliation], name, affiliation_name_sizes[affiliation])) {
+			return affiliation;
+		}
+	}
+	return -1;
+}
+
 void route_iq(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
@@ -651,7 +679,7 @@ void route_iq(Room *room, RouterChunk *chunk) {
 	BufferPtr buffer, node, node_attr_value = BPT_INITIALIZER;
 	Buffer node_name;
 	XmlAttr node_attr;
-	int attr_state;
+	int affiliation, role, attr_state;
 
 	sender = room_participant_by_jid(room, &ingress->real_from);
 	if (!BUF_EMPTY(&ingress->proxy_to.resource)) {
@@ -724,9 +752,8 @@ void route_iq(Room *room, RouterChunk *chunk) {
 		return;
 	}
 
+	LDEBUG("received iq:%c, xmlns '%.*s'", ingress->type, BPT_SIZE(&node_attr_value), node_attr_value.data);
 	if (ingress->type == 'g') {
-		LDEBUG("received iq:get, xmlns '%.*s'", BPT_SIZE(&node_attr_value), node_attr_value.data);
-
 		if (BPT_EQ_LIT("http://jabber.org/protocol/disco#info", &node_attr_value)) {
 			egress->iq_type = BUILD_IQ_ROOM_DISCO_INFO;
 			egress->room = room;
@@ -771,7 +798,7 @@ void route_iq(Room *room, RouterChunk *chunk) {
 				}
 			}
 
-			LDEBUG("got muc#admin request for affiliation = '%.*s'",
+			LDEBUG("got muc#admin 'get' for affiliation = '%.*s'",
 					BPT_SIZE(&node_attr_value), node_attr_value.data);
 
 			if (BPT_EMPTY(&node_attr_value)) {
@@ -780,24 +807,57 @@ void route_iq(Room *room, RouterChunk *chunk) {
 			}
 
 			egress->iq_type = BUILD_IQ_ROOM_AFFILIATIONS;
-			if (BPT_EQ_LIT("outcast", &node_attr_value)) {
-				egress->muc_items.affiliation = AFFIL_OUTCAST;
-				egress->muc_items.items = room->outcasts;
-			} else if (BPT_EQ_LIT("member", &node_attr_value)) {
-				egress->muc_items.affiliation = AFFIL_MEMBER;
-				egress->muc_items.items = room->members;
-			} else if (BPT_EQ_LIT("admin", &node_attr_value)) {
-				egress->muc_items.affiliation = AFFIL_ADMIN;
-				egress->muc_items.items = room->admins;
-			} else if (BPT_EQ_LIT("owner", &node_attr_value)) {
-				egress->muc_items.affiliation = AFFIL_OWNER;
-				egress->muc_items.items = room->owners;
+			egress->muc_items.affiliation = affiliation_by_name(&node_attr_value);
+			if (egress->muc_items.affiliation < 0) {
+				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+				return;
 			} else {
+				egress->muc_items.items = room->affiliations[egress->muc_items.affiliation];
+			}
+		}
+	} else if (ingress->type == 's') {
+		if (BPT_EQ_LIT("http://jabber.org/protocol/muc#admin", &node_attr_value)) {
+			if (attr_state == XMLNODE_EMPTY) {
+				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+				return;
+			}
+
+			if (!sender) {
+				router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
+				return;
+			}
+
+			buffer = node;
+			BPT_INIT(&node_attr_value);
+			for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
+					node.data = buffer.data) {
+				node.end = buffer.data;
+				xmlfsm_node_name(&node, &node_name);
+
+				if (!BUF_EQ_LIT("item", &node_name)) {
+					continue;
+				}
+
+				while ((attr_state = xmlfsm_get_attr(&node, &node_attr)) == XMLPARSE_SUCCESS) {
+					if (BPT_EQ_LIT("affiliation", &node_attr.name)) {
+						node_attr_value = node_attr.value;
+						break;
+					}
+				}
+
+				if (!BPT_EMPTY(&node_attr_value)) {
+					break;
+				}
+			}
+
+			LDEBUG("got muc#admin request for affiliation = '%.*s'",
+					BPT_SIZE(&node_attr_value), node_attr_value.data);
+
+			if (BPT_EMPTY(&node_attr_value)) {
 				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
 				return;
 			}
 		}
-	} else if (ingress->type == 's') {
 	}
 
 	if (egress->iq_type) {

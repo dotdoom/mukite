@@ -3,6 +3,7 @@
 #include "xmcomp/logger.h"
 
 #include "jid.h"
+#include "room.h"
 
 #include "builder.h"
 
@@ -31,40 +32,14 @@
 #define BUF_PUSH_LITERAL(data) \
 	BUF_PUSH(data, sizeof(data)-1)
 
-static const char* affiliation_names[] = {
-	"outcast",
-	"none",
-	"member",
-	"admin",
-	"owner"
-};
-static const int affiliation_sizes[] = {
-	7,
-	4,
-	6,
-	5,
-	5
-};
-
-static const char* roles[] = {
-	"visitor",
-	"participant",
-	"moderator"
-};
-static const int role_sizes[] = {
-	7,
-	11,
-	9
-};
-
 BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 	int i, code, chunk_size;
 	char code_str[3];
 
 	BUF_PUSH_LITERAL("<x xmlns='http://jabber.org/protocol/muc#user'><item affiliation='");
-	BUF_PUSH(affiliation_names[node->affiliation], affiliation_sizes[node->affiliation]);
+	BUF_PUSH(affiliation_names[node->affiliation], affiliation_name_sizes[node->affiliation]);
 	BUF_PUSH_LITERAL("' role='");
-	BUF_PUSH(roles[node->role], role_sizes[node->role]);
+	BUF_PUSH(role_names[node->role], role_name_sizes[node->role]);
 	if (node->jid) {
 		BUF_PUSH_LITERAL("' jid='");
 		BUF_PUSH(JID_STR(node->jid), JID_LEN(node->jid));
