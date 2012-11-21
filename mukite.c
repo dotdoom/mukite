@@ -109,10 +109,6 @@ int main(int argc, char **argv) {
 		}
 		reconnect_delay = 1;
 
-		// Display component hostname in process list - user convenience
-		strcpy(argv[0], APP_NAME " ");
-		strncat(argv[0], config.component.hostname, CONFIG_OPTION_LENGTH);
-
 		LDEBUG("allocating writer buffer, size %d", config.writer.buffer);
 		writer_buffer = malloc(config.writer.buffer);
 		ringbuffer_init(&config.writer_thread.ringbuffer,
