@@ -92,6 +92,7 @@ BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
 	int chunk_size;
 	ParticipantEntry *participant = room->participants;
 
+	LDEBUG("building room items");
 	for (; participant; participant = participant->next) {
 		BUF_PUSH_LITERAL("<item name='");
 		BUF_PUSH_BUF(participant->nick);
@@ -110,6 +111,7 @@ BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
 BOOL build_room_info(BuilderBuffer *buffer, Room *room, Buffer *host) {
 	int chunk_size;
 
+	LDEBUG("building room info");
 	BUF_PUSH_LITERAL("<identity category='conference' type='text' name='");
 	if (room->title.size) {
 		BUF_PUSH_BUF(room->title);
@@ -138,6 +140,7 @@ BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 	char participants_count[20];
 	Room *room = rooms->start;
 
+	LDEBUG("building component items (list of rooms)");
 	for (; room; room = room->next) {
 		BUF_PUSH_LITERAL("<item name='");
 		if (room->title.size) {
@@ -160,6 +163,7 @@ BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 BOOL build_room_affiliations(BuilderBuffer *buffer, AffiliationEntry *aff, int affiliation) {
 	int chunk_size;
 
+	LDEBUG("building room affiliations");
 	for (; aff; aff = aff->next) {
 		BUF_PUSH_LITERAL("<item affiliation='");
 		BUF_PUSH_STR(affiliation_names[affiliation]);
@@ -183,6 +187,8 @@ BOOL build_iq_time(BuilderBuffer *buffer) {
 	char str_buffer[40];
 	int chunk_size;
 
+	LDEBUG("building iq:time response");
+
 	time(&tm_t);
 	localtime_r(&tm_t, &tm);
 	if (strftime(str_buffer, sizeof(str_buffer), "%z", &tm) == 5) {
@@ -205,6 +211,8 @@ BOOL build_iq_time(BuilderBuffer *buffer) {
 
 BOOL build_error(XMPPError *error, BuilderBuffer *buffer) {
 	int chunk_size;
+
+	LDEBUG("building type=error stanza");
 
 	BUF_PUSH_LITERAL("<error code='");
 	BUF_PUSH_STR(error->code);
@@ -269,6 +277,9 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 	}
 
 	BUF_PUSH_LITERAL("'>");
+	
+	LDEBUG("header composed successfully");
+
 	BUF_PUSH_IFBPT(packet->user_data);
 
 	if (packet->type == 'e') {
@@ -359,6 +370,8 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 			BUF_PUSH_LITERAL("</iq>");
 			break;
 	}
+
+	LDEBUG("building packet: finished");
 
 	return TRUE;
 }
