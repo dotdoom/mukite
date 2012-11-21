@@ -159,7 +159,9 @@ BOOL send_packet(void *void_local_buffer_storage) {
 	LocalBufferStorage *lbs = (LocalBufferStorage *)void_local_buffer_storage;
 	lbs->buffer.data_end = lbs->buffer.data;
 	if (builder_build(lbs->packet, &lbs->buffer)) {
+		LDEBUG("writing %d bytes to cbuffer", (int)(lbs->buffer.data_end - lbs->buffer.data));
 		cbuffer_write(lbs->cbuffer, lbs->buffer.data, lbs->buffer.data_end - lbs->buffer.data);
+		LDEBUG("writing to cbuffer - complete");
 		return TRUE;
 	} else {
 		LERROR("parser output buffer (%d bytes) is not large enough to hold a stanza - dropped",

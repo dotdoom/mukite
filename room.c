@@ -23,11 +23,13 @@ const int affiliation_name_sizes[] = {
 };
 
 const char* role_names[] = {
+	"none",
 	"visitor",
 	"participant",
 	"moderator"
 };
 const int role_name_sizes[] = {
+	4,
 	7,
 	11,
 	9
@@ -672,15 +674,28 @@ int affiliation_by_name(BufferPtr *name) {
 	return -1;
 }
 
+int role_by_name(BufferPtr *name) {
+	int role;
+
+	for (role = ROLE_VISITOR; role <= ROLE_MODERATOR; ++role) {
+		if (BPT_EQ_BIN(role_names[role], name, role_name_sizes[role])) {
+			return role;
+		}
+	}
+
+	return -1;
+}
+
 void route_iq(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
 	ParticipantEntry *sender = 0, *receiver = 0;
 
-	BufferPtr buffer, node, node_attr_value = BPT_INITIALIZER;
+	BufferPtr buffer, node, nick, node_attr_value = BPT_INITIALIZER;
 	Buffer node_name;
 	XmlAttr node_attr;
 	int affiliation, role, attr_state;
+	Jid jid;
 
 	sender = room_participant_by_jid(room, &ingress->real_from);
 	if (!BUF_EMPTY(&ingress->proxy_to.resource)) {
@@ -771,7 +786,7 @@ void route_iq(Room *room, RouterChunk *chunk) {
 				router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
 				return;
 			}
-			if (sender->affiliation < AFFIL_ADMIN) {
+			if (sender->affiliation != AFFIL_ADMIN && sender->affiliation != AFFIL_OWNER) {
 				router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
 				return;
 			}
@@ -828,8 +843,12 @@ void route_iq(Room *room, RouterChunk *chunk) {
 				return;
 			}
 
+			if (sender->role < ROLE_MODERATOR) {
+				router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
+				return;
+			}
+
 			buffer = node;
-			BPT_INIT(&node_attr_value);
 			for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
 					node.data = buffer.data) {
 				node.end = buffer.data;
@@ -839,24 +858,48 @@ void route_iq(Room *room, RouterChunk *chunk) {
 					continue;
 				}
 
+				role = affiliation = -1;
+				jid_init(&jid);
+				BPT_INIT(&nick);
 				while ((attr_state = xmlfsm_get_attr(&node, &node_attr)) == XMLPARSE_SUCCESS) {
 					if (BPT_EQ_LIT("affiliation", &node_attr.name)) {
-						node_attr_value = node_attr.value;
-						break;
+						affiliation = affiliation_by_name(&node_attr.value);
+						if (affiliation == -1) {
+							router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+							return;
+						}
+					} else if (BPT_EQ_LIT("role", &node_attr.name)) {
+						role = role_by_name(&node_attr.value);
+						if (role == -1) {
+							router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+							return;
+						}
+					} else if (BPT_EQ_LIT("jid", &node_attr.name)) {
+						if (!jid_struct(&node_attr.value, &jid)) {
+							router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+							return;
+						}
+					} else if (BPT_EQ_LIT("nick", &node_attr.name)) {
+						nick = node_attr.value;
 					}
 				}
 
-				if (!BPT_EMPTY(&node_attr_value)) {
-					break;
+				/*if (role == -1 && affiliation == -1 || jid_empty(&jid)) {
+					router_error(chink, &error_definitions[ERROR_IQ_BAD]);
+					return;
 				}
-			}
 
-			LDEBUG("got muc#admin request for affiliation = '%.*s'",
-					BPT_SIZE(&node_attr_value), node_attr_value.data);
+				if (BPT_EMPTY(&jid)) {
+					receiver = room_participant_by_nick(&nick);
+				} else {
+					receiver = room_participant_by_jid(&jid);
+				}
+				if (!receiver) {
+					router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+					return;
+				}*/
 
-			if (BPT_EMPTY(&node_attr_value)) {
-				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
-				return;
+				//if (affiliation >= 0 && jid
 			}
 		}
 	}

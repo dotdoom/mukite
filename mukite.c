@@ -41,9 +41,8 @@ static void load_data() {
 	LINFO("loading from the file: '%s'", config.parser.data_file);
 	if ((input = fopen(config.parser.data_file, "r"))) {
 		if (!rooms_deserialize(&config.rooms, input, 100)) {
-			LERROR("deserialization failure, probably disk error/version mismatch;\n"
+			LFATAL("deserialization failure, probably disk error/version mismatch;\n"
 					"please rename or remove the data file to start from scratch");
-			exit(2);
 		}
 		fclose(input);
 	} else {

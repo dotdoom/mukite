@@ -23,6 +23,8 @@ int jid_cmp(Jid *jid1, Jid *jid2, int mode);
 int jid_strcmp(Jid *jid, Buffer *str, int part);
 void jid_cpy(Jid *dst, Jid *src, int part);
 void jid_destroy(Jid *jid);
+void jid_init(Jid *jid);
+BOOL jid_empty(Jid *jid);
 
 BOOL jid_serialize(Jid *, FILE *);
 BOOL jid_deserialize(Jid *, FILE *);

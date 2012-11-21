@@ -5,6 +5,16 @@
 
 #include "jid.h"
 
+void jid_init(Jid *jid) {
+	BPT_INIT(&jid->node);
+	BPT_INIT(&jid->host);
+	BPT_INIT(&jid->resource);
+}
+
+BOOL jid_empty(Jid *jid) {
+	return !jid->host.data;
+}
+
 BOOL jid_struct(BufferPtr *jid_string, Jid *jid_struct) {
 	int part = JID_NODE;
 	char *part_start = jid_string->data,
