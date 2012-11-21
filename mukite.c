@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
 	// For connect/authenticate failures
 	int reconnect_delay = 1;
 
-	// CBuffer buffer for the writer
+	// RingBuffer buffer for the writer
 	char *writer_buffer = 0;
 
 	LINFO("%s starting", APP_NAME);
@@ -115,7 +115,7 @@ int main(int argc, char **argv) {
 
 		LDEBUG("allocating writer buffer, size %d", config.writer.buffer);
 		writer_buffer = malloc(config.writer.buffer);
-		cbuffer_init(&config.writer_thread.cbuffer,
+		ringbuffer_init(&config.writer_thread.ringbuffer,
 				writer_buffer, config.writer.buffer);
 
 		LDEBUG("creating reader queue, size %d", config.reader.queue);
@@ -137,14 +137,14 @@ int main(int argc, char **argv) {
 		LINFO("started");
 		LDEBUG("joining reader thread");
 		pthread_join(config.reader_thread.thread, 0);
-		// Switch cbuffer to offline, indicating no more data is expected.
+		// Switch ringbuffer to offline, indicating no more data is expected.
 		// As soon as the writer finishes the job, it will terminate
-		cbuffer_offline(&config.writer_thread.cbuffer);
+		ringbuffer_offline(&config.writer_thread.ringbuffer);
 		LDEBUG("joining writer thread");
 		pthread_join(config.writer_thread.thread, 0);
 
 		LINFO("destroying buffers, queues and disconnecting");
-		cbuffer_destroy(&config.writer_thread.cbuffer);
+		ringbuffer_destroy(&config.writer_thread.ringbuffer);
 		queue_destroy(&config.reader_thread.queue);
 
 		net_unstream(&config.socket);

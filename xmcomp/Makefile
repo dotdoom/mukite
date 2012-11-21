@@ -2,7 +2,7 @@ BARE_CFLAGS=-fPIC -O2 -Wall
 CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DLOG_POS -DLOG_PTHREAD -DLOG_CTIME
 UNAME=$(shell uname)
 
-SOURCES=writer.c reader.c logger.c network.c xmlfsm.c queue.c cbuffer.c sighelper.c buffer.c
+SOURCES=writer.c reader.c logger.c network.c xmlfsm.c queue.c ringbuffer.c sighelper.c buffer.c
 OBJECTS=$(SOURCES:.c=.o)
 LIBRARY=xmcomp.o
 EXTLIB=sha1/sha1.o

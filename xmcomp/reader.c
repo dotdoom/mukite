@@ -9,7 +9,7 @@
 
 #include "reader.h"
 
-int realloc_cyclic_buffer(BufferPtr *buffer, BufferPtr *data, int new_size) {
+int realloc_ring_buffer(BufferPtr *buffer, BufferPtr *data, int new_size) {
 	char *new_buffer = 0;
 	int tail_size, data_size = (data->end > data->data) ?
 		BPT_SIZE(data) : (BPT_SIZE(buffer) - BPT_SIZE(data));
@@ -101,7 +101,7 @@ void *reader_thread_entry(void *void_config) {
 					network_buffer_size, queue->network_buffer_size);
 
 			network_buffer_size =
-				realloc_cyclic_buffer(&network_buffer, &network_data, queue->network_buffer_size);
+				realloc_ring_buffer(&network_buffer, &network_data, queue->network_buffer_size);
 
 			LINFO("network buffer has been reallocated to %d bytes", network_buffer_size);
 		}
@@ -109,7 +109,7 @@ void *reader_thread_entry(void *void_config) {
 		LDEBUG("trying to parse stanza from the received buffer");
 		current_stanza = network_data.data;
 		while (xmlfsm_skip_node(&network_data, 0, &network_buffer) == XMLPARSE_SUCCESS) {
-			LDEBUG("received stanza: '%.*s<!-- cyclic buffer rev split -->%.*s'",
+			LDEBUG("received stanza: '%.*s<!-- ringbuffer rev split -->%.*s'",
 					(int)((current_stanza < network_data.data) ?
 						0 : network_data.data - network_buffer.data),
 					network_buffer.data,

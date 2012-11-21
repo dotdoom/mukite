@@ -22,7 +22,7 @@ int xmlfsm_skip_node(BufferPtr *buffer, int level, BufferPtr *real_buffer) {
 	char quote_char = 0;
 	char *current_end =
 		(real_buffer && buffer->data > buffer->end) ?
-		real_buffer->end : // Wrap on the cycled buffer border
+		real_buffer->end : // Wrap on the ring buffer border
 		buffer->end;
 
 	// All this assumes there's no such thing - '<![CDATA['

@@ -2,7 +2,7 @@
 #include <string.h>
 #include <pthread.h>
 
-#include "xmcomp/cbuffer.h"
+#include "xmcomp/ringbuffer.h"
 #include "xmcomp/common.h"
 #include "xmcomp/logger.h"
 #include "xmcomp/xmlfsm.h"
@@ -151,7 +151,7 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 
 typedef struct {
 	BuilderBuffer buffer;
-	CBuffer *cbuffer;
+	RingBuffer *ringbuffer;
 	BuilderPacket *packet;
 } LocalBufferStorage;
 
@@ -159,9 +159,9 @@ BOOL send_packet(void *void_local_buffer_storage) {
 	LocalBufferStorage *lbs = (LocalBufferStorage *)void_local_buffer_storage;
 	lbs->buffer.data_end = lbs->buffer.data;
 	if (builder_build(lbs->packet, &lbs->buffer)) {
-		LDEBUG("writing %d bytes to cbuffer", (int)(lbs->buffer.data_end - lbs->buffer.data));
-		cbuffer_write(lbs->cbuffer, lbs->buffer.data, lbs->buffer.data_end - lbs->buffer.data);
-		LDEBUG("writing to cbuffer - complete");
+		LDEBUG("writing %d bytes to ringbuffer", (int)(lbs->buffer.data_end - lbs->buffer.data));
+		ringbuffer_write(lbs->ringbuffer, lbs->buffer.data, lbs->buffer.data_end - lbs->buffer.data);
+		LDEBUG("writing to ringbuffer - complete");
 		return TRUE;
 	} else {
 		LERROR("parser output buffer (%d bytes) is not large enough to hold a stanza - dropped",
@@ -191,7 +191,7 @@ void *parser_thread_entry(void *void_parser_config) {
 
 	lbs.buffer.data = malloc(allocated_buffer_size);
 	lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
-	lbs.cbuffer = &config->writer_thread.cbuffer;
+	lbs.ringbuffer = &config->writer_thread.ringbuffer;
 	lbs.packet = &router_chunk.egress;
 
 	LINFO("started");

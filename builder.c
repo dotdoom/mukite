@@ -65,6 +65,7 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 
 BOOL build_stats(BuilderBuffer *buffer) {
 	/*
+
 <stat name='time/uptime'/>
 <stat name='queue/overflows'/>
 <stat name='queue/underflows'/>
@@ -75,9 +76,11 @@ BOOL build_stats(BuilderBuffer *buffer) {
 <stat name='queue/data/pop'/>
 <stat name='queue/free/push'/>
 <stat name='queue/free/pop'/>
-<stat name='cbuffer/underflows'/>
-<stat name='cbuffer/overflows'/>
-<stat name='cbuffer/writes'/>
+<stat name='ringbuffer/underflows'/>
+<stat name='ringbuffer/overflows'/>
+<stat name='ringbuffer/writes'/>
+<stat name='ringbuffer/data'/>
+<stat name='ringbuffer/size'/>
 <stat name='muc/rooms'/>
 <stat name='muc/users'/>
 <stat name='muc/jids'/>

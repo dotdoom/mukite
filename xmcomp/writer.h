@@ -4,12 +4,12 @@
 #include <pthread.h>
 
 #include "network.h"
-#include "cbuffer.h"
+#include "ringbuffer.h"
 
 typedef struct {
 	BOOL enabled;
 	Socket *socket;
-	CBuffer cbuffer;
+	RingBuffer ringbuffer;
 	pthread_t thread;
 } WriterConfig;
 
