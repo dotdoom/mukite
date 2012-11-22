@@ -20,13 +20,27 @@ typedef struct {
 } RingBufferStats;
 
 typedef struct {
-	// Write position can be evaled but saved for the speed
-	char *start, *read_position;
-	int data_size, buffer_size;
+	char
+		// begginning of the allocated memory area
+		*start,
+		// position from where data for reading is available;
+		// any are before read_position and after (read_position+data_size)
+		// is considered free
+		*read_position;
+	int
+		// the size of the real data. Note that read_position+data_size
+		// may exceed memory buffer end. This is the nature of a ring buffer
+		data_size,
+		// size of the memory area allocated
+		buffer_size;
 
-	// Optimization
-	char *end, *write_position;
-	int write_size;
+	// optimization
+	char
+		// end of the allocated memory area; in fact, start+buffer_size precomputed for speed
+		*end,
+		// position where the next data block may be written. In fact,
+		// cycled (read_position+data_size) - precomputed for speed
+		*write_position;
 
 	RingBufferSync sync;
 	RingBufferStats stats;

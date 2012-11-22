@@ -12,7 +12,6 @@ void ringbuffer_init(RingBuffer *ringbuffer, char *buffer, int size) {
 	ringbuffer->buffer_size = size;
 	ringbuffer->data_size = 0;
 	ringbuffer->end = ringbuffer->start + ringbuffer->buffer_size;
-	ringbuffer->write_size = ringbuffer->buffer_size;
 
 	pthread_mutex_init(&sync->ringbuffer_mutex, 0);
 	pthread_cond_init(&sync->data_available_cv, 0);
@@ -24,7 +23,6 @@ void ringbuffer_init(RingBuffer *ringbuffer, char *buffer, int size) {
 void ringbuffer_clear(RingBuffer *ringbuffer) {
 	ringbuffer->read_position = ringbuffer->write_position = ringbuffer->start;
 	ringbuffer->data_size = 0;
-	ringbuffer->write_size = ringbuffer->buffer_size;
 }
 
 void ringbuffer_destroy(RingBuffer *ringbuffer) {
@@ -38,23 +36,28 @@ inline void ringbuffer_write(RingBuffer *ringbuffer, char *buffer, int size) {
 	RingBufferSync *sync = &ringbuffer->sync;
 	RingBufferStats *stats = &ringbuffer->stats;
 
-	int write_size = 0;
+	int write_size = 0, continuous_block_size;
 	pthread_mutex_lock(&ringbuffer->sync.ringbuffer_mutex);
 	while (size > 0) {
-		while (!ringbuffer->write_size) {
-			++stats->overflows;
-			pthread_cond_wait(&sync->free_available_cv, &sync->ringbuffer_mutex);
-		}
+		do {
+			if (ringbuffer->write_position <= ringbuffer->read_position && 
+					ringbuffer->data_size > 0) {
+				continuous_block_size = ringbuffer->read_position - ringbuffer->write_position;
+			} else {
+				continuous_block_size = ringbuffer->end - ringbuffer->write_position;
+			}
+			if (!continuous_block_size) {
+				++stats->overflows;
+				pthread_cond_wait(&sync->free_available_cv, &sync->ringbuffer_mutex);
+			}
+		} while (!continuous_block_size);
 
-		write_size = (ringbuffer->write_size > size) ? size : ringbuffer->write_size;
+		write_size = (continuous_block_size > size) ? size : continuous_block_size;
 		memcpy(ringbuffer->write_position, buffer, write_size);
 
 		ringbuffer->write_position += write_size;
-		if (ringbuffer->write_position > ringbuffer->end) {
+		if (ringbuffer->write_position == ringbuffer->end) {
 			ringbuffer->write_position = ringbuffer->start;
-			ringbuffer->write_size = ringbuffer->read_position - ringbuffer->start;
-		} else {
-			ringbuffer->write_size -= write_size;
 		}
 		ringbuffer->data_size += write_size;
 
@@ -101,10 +104,6 @@ inline void ringbuffer_release_chunk(RingBuffer *ringbuffer, int size) {
 	RingBufferSync *sync = &ringbuffer->sync;
 	
 	pthread_mutex_lock(&sync->ringbuffer_mutex);
-
-	if (ringbuffer->read_position > ringbuffer->write_position) {
-		ringbuffer->write_size += size;
-	}
 
 	ringbuffer->read_position += size;
 	if (ringbuffer->read_position == ringbuffer->end) {
