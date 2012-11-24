@@ -288,13 +288,37 @@ BOOL participants_deserialize(Room *room, FILE *input, int limit) {
 	DESERIALIZE_LIST(
 		jid_deserialize(&new_entry->jid, input) &&
 		buffer_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE) &&
-		buffer_ptr_deserialize(&new_entry->presence, input, PRESENCE_SIZE_LIMIT) &&
+		buffer_ptr_deserialize(&new_entry->presence, input, REASONABLE_RAW_LIMIT) &&
 		DESERIALIZE_BASE(new_entry->affiliation) &&
 		DESERIALIZE_BASE(new_entry->role),
 
 		new_entry->next->prev = new_entry
 	);
 	room->participants_count = entry_count;
+	return TRUE;
+}
+
+BOOL history_serialize(HistoryEntry *list, FILE *output) {
+	LDEBUG("serializing room history");
+	SERIALIZE_LIST(
+		buffer_ptr_serialize(&list->nick, output) &&
+		buffer_ptr_serialize(&list->header, output) &&
+		buffer_ptr_serialize(&list->inner, output) &&
+		SERIALIZE_BASE(list->delay)
+	);
+	return TRUE;
+}
+
+BOOL history_deserialize(HistoryEntry **list, FILE *input, int limit) {
+	int entry_count = 0;
+	HistoryEntry *new_entry = 0;
+	LDEBUG("deserializing room history");
+	DESERIALIZE_LIST(
+		buffer_ptr_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE) &&
+		buffer_ptr_deserialize(&new_entry->header, input, REASONABLE_RAW_LIMIT) &&
+		buffer_ptr_deserialize(&new_entry->inner, input, REASONABLE_RAW_LIMIT) &&
+		DESERIALIZE_BASE(new_entry->delay),
+	);
 	return TRUE;
 }
 
@@ -354,6 +378,8 @@ BOOL room_serialize(Room *room, FILE *output) {
 		SERIALIZE_BASE(room->max_participants) &&
 		SERIALIZE_BASE(room->_unused) &&
 
+		history_serialize(room->history, output) &&
+
 		participants_serialize(room->participants, output) &&
 		affiliations_serialize(room->affiliations[AFFIL_OWNER], output) &&
 		affiliations_serialize(room->affiliations[AFFIL_ADMIN], output) &&
@@ -374,6 +400,8 @@ BOOL room_deserialize(Room *room, FILE *input) {
 		DESERIALIZE_BASE(room->default_role) &&
 		DESERIALIZE_BASE(room->max_participants) &&
 		DESERIALIZE_BASE(room->_unused) &&
+
+		history_deserialize(&room->history, input, HISTORY_ITEMS_COUNT_LIMIT) &&
 
 		participants_deserialize(room, input, PARTICIPANTS_LIMIT) &&
 		affiliations_deserialize(&room->affiliations[AFFIL_OWNER], input, AFFILIATION_LIST_LIMIT) &&
@@ -422,14 +450,14 @@ BOOL erase_muc_user_node(IncomingPacket *packet) {
 	return TRUE;
 }
 
-void send_to_participants(BuilderPacket *output, SendCallback *send, ParticipantEntry *participant, int limit) {
+void send_to_participants(RouterChunk *chunk, ParticipantEntry *participant, int limit) {
 	int sent = 0;
 	for (; participant && sent < limit; participant = participant->next, ++sent) {
 		LDEBUG("routing stanza to '%.*s', real JID '%.*s'",
 				participant->nick.size, participant->nick.data,
 				JID_LEN(&participant->jid), JID_STR(&participant->jid));
-		output->to = participant->jid;
-		send->proc(send->data);
+		chunk->egress.to = participant->jid;
+		chunk->send.proc(chunk->send.data);
 	}
 }
 
@@ -475,11 +503,14 @@ BOOL room_broadcast_presence(Room *room, BuilderPacket *output, SendCallback *se
 	return TRUE;
 }
 
+void history_push(Room *room, RouterChunk *chunk) {
+
+}
+
 void route_message(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
 	ParticipantEntry *sender = 0, *receiver = 0;
-
 
 	if (!(sender = room_participant_by_jid(room, &ingress->real_from))) {
 		router_error(chunk, &error_definitions[ERROR_EXTERNAL_MESSAGE]);
@@ -507,7 +538,7 @@ void route_message(Room *room, RouterChunk *chunk) {
 				receiver->nick.size, receiver->nick.data,
 				JID_LEN(&receiver->jid), JID_STR(&receiver->jid));
 		router_cleanup(ingress);
-		send_to_participants(egress, &chunk->send, receiver, 1);
+		send_to_participants(chunk, receiver, 1);
 	} else {
 		if (sender->role < ROLE_PARTICIPANT) {
 			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PUBLIC]);
@@ -527,7 +558,8 @@ void route_message(Room *room, RouterChunk *chunk) {
 
 		router_cleanup(ingress);
 		//sender->last_message_time = now;
-		send_to_participants(egress, &chunk->send, room->participants, 1 << 30);
+		history_push(room, chunk);
+		send_to_participants(chunk, room->participants, 1 << 30);
 	}
 }
 
@@ -642,7 +674,7 @@ void route_presence(Room *room, RouterChunk *chunk) {
 			} else {
 				egress->participant.jid = 0;
 			}
-			send_to_participants(egress, &chunk->send, receiver, 1);
+			send_to_participants(chunk, receiver, 1);
 		}
 		sender = receiver;
 	}
@@ -658,6 +690,7 @@ void route_presence(Room *room, RouterChunk *chunk) {
 		room_leave(room, sender);
 	} else {
 		// Cache participant's presence to broadcast it to newcomers
+		// FIXME(artem): drop if exceeds the limit to avoid deserialization failures
 		if (sender->presence.data) {
 			sender->presence.data = realloc(sender->presence.data, BPT_SIZE(&ingress->inner));
 		} else {

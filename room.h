@@ -28,7 +28,14 @@ extern const int role_name_sizes[];
 #define USER_STRING_OPTION_LIMIT 4096
 #define PARTICIPANTS_LIMIT 1024
 #define AFFILIATION_LIST_LIMIT 4096
-#define PRESENCE_SIZE_LIMIT 65535
+#define REASONABLE_RAW_LIMIT (1 << 20)
+#define HISTORY_ITEMS_COUNT_LIMIT 100
+
+typedef struct HistoryEntry {
+	BufferPtr nick, header, inner;
+	time_t delay;
+	struct HistoryEntry *next;
+} HistoryEntry;
 
 typedef struct AffiliationEntry {
 	Jid jid;
@@ -78,12 +85,14 @@ typedef struct Room {
 	int flags;
 	int default_role;
 	int max_participants;
-	int _unused[16];
+	long _unused[7];
 
 	ParticipantEntry *participants;
 	int participants_count;
 
 	AffiliationEntry *affiliations[4];
+
+	HistoryEntry *history;
 
 	struct Room *prev, *next;
 	pthread_mutex_t sync;
