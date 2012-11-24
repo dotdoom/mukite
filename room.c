@@ -7,20 +7,25 @@
 
 #include "room.h"
 
-const char* affiliation_names[] = {
+// "magic" with &xxx[1] is because 'none' equals -1.
+// That's because only 4 last affiliations are stored,
+// and it helps to keep affiliations in the Room struct properly
+static const char* _affiliation_names[] = {
+	"none",
 	"outcast",
 	"member",
 	"admin",
-	"owner",
-	"none"
+	"owner"
 };
-const int affiliation_name_sizes[] = {
+const char** affiliation_names = &_affiliation_names[1];
+static const int _affiliation_name_sizes[] = {
+	4,
 	7,
 	6,
 	5,
-	5,
-	4
+	5
 };
+const int* affiliation_name_sizes = &_affiliation_name_sizes[1];
 
 const char* role_names[] = {
 	"none",
@@ -616,7 +621,7 @@ void route_presence(Room *room, RouterChunk *chunk) {
 				return;
 			}
 			if ((room->flags & MUC_FLAG_MEMBERSONLY) == MUC_FLAG_MEMBERSONLY &&
-					affiliation == AFFIL_NONE) {
+					affiliation < AFFIL_MEMBER) {
 				router_error(chunk, &error_definitions[ERROR_MEMBERS_ONLY]);
 				return;
 			}
@@ -786,7 +791,7 @@ void route_iq(Room *room, RouterChunk *chunk) {
 				router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
 				return;
 			}
-			if (sender->affiliation != AFFIL_ADMIN && sender->affiliation != AFFIL_OWNER) {
+			if (sender->affiliation < AFFIL_ADMIN) {
 				router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
 				return;
 			}

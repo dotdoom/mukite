@@ -13,8 +13,8 @@
 #define ROLE_PARTICIPANT 2
 #define ROLE_MODERATOR 3
 
-extern const char* affiliation_names[];
-extern const int affiliation_name_sizes[];
+extern const char** affiliation_names;
+extern const int* affiliation_name_sizes;
 
 #define AFFIL_OUTCAST 0
 #define AFFIL_MEMBER 1
