@@ -362,6 +362,12 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 		}
 	}
 
+	if (packet->delay) {
+		BUF_PUSH_LITERAL(
+				"<delay xmlns='urn:xmpp:delay' from='hurr@conference.durr.purr' stamp='2012-12-05T14:48:28Z'/>"
+				"<x xmlns='jabber:x:delay' stamp='20121205T14:48:28'/>");
+	}
+
 	switch (packet->name) {
 		case 'm':
 			BUF_PUSH_LITERAL("</message>");

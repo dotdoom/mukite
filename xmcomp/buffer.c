@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 
 #include "buffer.h"
 
@@ -35,4 +36,17 @@ BOOL buffer_ptr_deserialize(BufferPtr *buffer_ptr, FILE *input, int limit) {
 	buffer_ptr->data = buffer.data;
 	buffer_ptr->end = buffer.data + buffer.size;
 	return TRUE;
+}
+
+void buffer_ptr_cpy(BufferPtr *to, BufferPtr *from) {
+	int size = BPT_SIZE(from);
+	to->data = malloc(size);
+	to->end = to->data + size;
+	memcpy(to->data, from->data, size);
+}
+
+void buffer_ptr__cpy(BufferPtr *to, Buffer *from) {
+	to->data = malloc(from->size);
+	to->end = to->data + from->size;
+	memcpy(to->data, from->data, from->size);
 }

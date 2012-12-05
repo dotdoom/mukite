@@ -45,6 +45,7 @@ typedef struct {
 	char name, type;
 
 	int iq_type;
+	time_t delay;
 
 	BufferPtr header, user_data;
 	union {

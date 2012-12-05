@@ -131,6 +131,8 @@ static XMPPError error_definitions[] = {
 	}
 };
 
+#define SEND(chunk) (chunk)->send.proc((chunk)->send.data)
+
 void room_init(Room *room, BufferPtr *node) {
 	memset(room, 0, sizeof(*room));
 	pthread_mutex_init(&room->sync, 0);
@@ -139,7 +141,7 @@ void room_init(Room *room, BufferPtr *node) {
 	memcpy(room->node.data, node->data, room->node.size);
 	room->flags = MUC_FLAGS_DEFAULT;
 	room->max_participants = 100;
-
+	room->max_history_size = 20;
 	room->default_role = ROLE_PARTICIPANT;
 }
 
@@ -154,7 +156,7 @@ int room_role_for_affiliation(Room *room, int affiliation) {
 	return room->default_role;
 }
 
-inline AffiliationEntry *find_affiliation(AffiliationEntry *entry, Jid *jid) {
+inline static AffiliationEntry *find_affiliation(AffiliationEntry *entry, Jid *jid) {
 	for (; entry; entry = entry->next) {
 		if (!jid_cmp(&entry->jid, jid, JID_FULL | JID_CMP_NULLWC)) {
 			return entry;
@@ -236,10 +238,9 @@ void room_leave(Room *room, ParticipantEntry *participant) {
 ParticipantEntry *room_participant_by_nick(Room *room, BufferPtr *nick) {
 	ParticipantEntry *current = room->participants;
 	for (; current; current = current->next) {
-		if (current->nick.size == BPT_SIZE(nick)) {
-			if (!memcmp(current->nick.data, nick->data, current->nick.size)) {
-				return current;
-			}
+		if (current->nick.size == BPT_SIZE(nick) &&
+				!memcmp(current->nick.data, nick->data, current->nick.size)) {
+			return current;
 		}
 	}
 
@@ -309,16 +310,20 @@ BOOL history_serialize(HistoryEntry *list, FILE *output) {
 	return TRUE;
 }
 
-BOOL history_deserialize(HistoryEntry **list, FILE *input, int limit) {
+BOOL history_deserialize(Room *room, FILE *input, int limit) {
 	int entry_count = 0;
-	HistoryEntry *new_entry = 0;
+	HistoryEntry **list = &room->history, *new_entry = 0;
 	LDEBUG("deserializing room history");
 	DESERIALIZE_LIST(
 		buffer_ptr_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE) &&
 		buffer_ptr_deserialize(&new_entry->header, input, REASONABLE_RAW_LIMIT) &&
 		buffer_ptr_deserialize(&new_entry->inner, input, REASONABLE_RAW_LIMIT) &&
 		DESERIALIZE_BASE(new_entry->delay),
+
+		new_entry->next->prev = new_entry
 	);
+	room->history_last = new_entry;
+	room->history_entries_count = entry_count;
 	return TRUE;
 }
 
@@ -376,6 +381,7 @@ BOOL room_serialize(Room *room, FILE *output) {
 		SERIALIZE_BASE(room->flags) &&
 		SERIALIZE_BASE(room->default_role) &&
 		SERIALIZE_BASE(room->max_participants) &&
+		SERIALIZE_BASE(room->max_history_size) &&
 		SERIALIZE_BASE(room->_unused) &&
 
 		history_serialize(room->history, output) &&
@@ -399,9 +405,10 @@ BOOL room_deserialize(Room *room, FILE *input) {
 		DESERIALIZE_BASE(room->flags) &&
 		DESERIALIZE_BASE(room->default_role) &&
 		DESERIALIZE_BASE(room->max_participants) &&
+		DESERIALIZE_BASE(room->max_history_size) &&
 		DESERIALIZE_BASE(room->_unused) &&
 
-		history_deserialize(&room->history, input, HISTORY_ITEMS_COUNT_LIMIT) &&
+		history_deserialize(room, input, HISTORY_ITEMS_COUNT_LIMIT) &&
 
 		participants_deserialize(room, input, PARTICIPANTS_LIMIT) &&
 		affiliations_deserialize(&room->affiliations[AFFIL_OWNER], input, AFFILIATION_LIST_LIMIT) &&
@@ -457,7 +464,7 @@ void send_to_participants(RouterChunk *chunk, ParticipantEntry *participant, int
 				participant->nick.size, participant->nick.data,
 				JID_LEN(&participant->jid), JID_STR(&participant->jid));
 		chunk->egress.to = participant->jid;
-		chunk->send.proc(chunk->send.data);
+		SEND(chunk);
 	}
 }
 
@@ -503,11 +510,90 @@ BOOL room_broadcast_presence(Room *room, BuilderPacket *output, SendCallback *se
 	return TRUE;
 }
 
-void history_push(Room *room, RouterChunk *chunk) {
+void history_push(Room *room, RouterChunk *chunk, ParticipantEntry *sender) {
+	HistoryEntry *next = 0, *new_item = 0;
+	if (!room->max_history_size) {
+		return;
+	}
 
+	new_item = malloc(sizeof(*new_item));
+	memset(new_item, 0, sizeof(*new_item));
+	buffer_ptr__cpy(&new_item->nick, &sender->nick);
+	buffer_ptr_cpy(&new_item->header, &chunk->ingress.header);
+	buffer_ptr_cpy(&new_item->inner, &chunk->ingress.inner);
+	new_item->delay = 1; // TODO(artem): put a real timestamp in new_item->delay
+
+	LDEBUG("pushing new history item");
+
+	if (room->history) {
+		LDEBUG("pushing new history item");
+		if (room->history_entries_count == room->max_history_size) {
+			next = room->history->next;
+			if (next) {
+				next->prev = 0;
+			} else {
+				room->history_last = 0;
+			}
+			free(room->history);
+			room->history = next;
+			--room->history_entries_count;
+		}
+
+		if (room->history_last) {
+			room->history_last->next = new_item;
+		}
+		new_item->prev = room->history_last;
+		room->history_last = new_item;
+		++room->history_entries_count;
+	} else {
+		room->history = room->history_last = new_item;
+		room->history_entries_count = 1;
+	}
 }
 
-void route_message(Room *room, RouterChunk *chunk) {
+static HistoryEntry *room_history_first_item(Room *room, int maxchars, int maxstanzas) {
+	HistoryEntry *first_item = 0;
+	if (maxchars < 0 && maxstanzas < 0) {
+		// shortcut
+		return room->history;
+	}
+	for (first_item = room->history_last; first_item; first_item = first_item->prev) {
+		if (maxchars >= 0 && (maxchars -= BPT_SIZE(&first_item->inner)) < 0) {
+			return first_item->next;
+		}
+		if (maxstanzas >= 0 && !maxstanzas--) {
+			return first_item->next;
+		}
+	}
+	return room->history;
+}
+
+static void room_history_send(Room *room, RouterChunk *chunk, HistoryEntry *history,
+		ParticipantEntry *receiver) {
+	BuilderPacket *egress;
+	
+	egress = &chunk->egress;
+
+	egress->name = 'm';
+	egress->type = 'g';
+	egress->to = receiver->jid;
+
+	for (; history; history = history->next) {
+		egress->from_nick.data = history->nick.data;
+		egress->from_nick.size = BPT_SIZE(&history->nick);
+		egress->header = history->header;
+		egress->user_data = history->inner;
+		egress->delay = history->delay;
+		SEND(chunk);
+	}
+}
+
+static BOOL admin_action_allowed(ParticipantEntry *source, ParticipantEntry *target,
+		int new_affiliation, int new_role) {
+	return FALSE;
+}
+
+static void route_message(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
 	ParticipantEntry *sender = 0, *receiver = 0;
@@ -545,6 +631,9 @@ void route_message(Room *room, RouterChunk *chunk) {
 			return;
 		}
 
+		// TODO(artem): it is possible for the occupant to fabricate a <delay> in groupchat stanza;
+		// by the time of writing this, ejabberd does not cut off that node - neither do we
+
 		/*now = time(0);
 		now_diff = difftime(now, sender->last_message.time);
 		if (now_diff < 0.0001) {
@@ -558,12 +647,12 @@ void route_message(Room *room, RouterChunk *chunk) {
 
 		router_cleanup(ingress);
 		//sender->last_message_time = now;
-		history_push(room, chunk);
+		history_push(room, chunk, sender);
 		send_to_participants(chunk, room->participants, 1 << 30);
 	}
 }
 
-void route_presence(Room *room, RouterChunk *chunk) {
+static void route_presence(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
 	ParticipantEntry *sender = 0, *receiver = 0;
@@ -594,9 +683,7 @@ void route_presence(Room *room, RouterChunk *chunk) {
 			egress->from_nick = sender->nick;
 			egress->participant.affiliation = sender->affiliation;
 			egress->participant.role = sender->role;
-			new_nick.data = malloc(BPT_SIZE(&ingress->proxy_to.resource));
-			memcpy(new_nick.data, ingress->proxy_to.resource.data, BPT_SIZE(&ingress->proxy_to.resource));
-			new_nick.end = new_nick.data + BPT_SIZE(&ingress->proxy_to.resource);
+			buffer_ptr_cpy(&new_nick, &ingress->proxy_to.resource);
 			egress->participant.nick = new_nick;
 			egress->user_data = ingress->inner;
 			egress->type = 'u';
@@ -662,7 +749,8 @@ void route_presence(Room *room, RouterChunk *chunk) {
 		receiver = room_join(room, &ingress->real_from, &ingress->proxy_to.resource, affiliation);
 		router_cleanup(ingress);
 
-		// Skip first participant as we know this is the one who just joined
+		// Send occupants' presences to the new occupant. Skip the first item
+		// as we know this is the one who just joined
 		for (sender = room->participants->next; sender; sender = sender->next) {
 			egress->from_nick = sender->nick;
 			egress->participant.affiliation = sender->affiliation;
@@ -686,6 +774,12 @@ void route_presence(Room *room, RouterChunk *chunk) {
 	egress->user_data = ingress->inner;
 	room_broadcast_presence(room, egress, &chunk->send, sender);
 
+	if (receiver) {
+		// This indicates that the user has just joined the room
+		// TODO(artem): parse maxchars and maxstanzas
+		room_history_send(room, chunk, room_history_first_item(room, -1, -1), receiver);
+	}
+
 	if (ingress->type == 'u') {
 		room_leave(room, sender);
 	} else {
@@ -701,7 +795,7 @@ void route_presence(Room *room, RouterChunk *chunk) {
 	}
 }
 
-int affiliation_by_name(BufferPtr *name) {
+static int affiliation_by_name(BufferPtr *name) {
 	int affiliation;
 
 	for (affiliation = AFFIL_OUTCAST; affiliation <= AFFIL_OWNER; ++affiliation) {
@@ -712,7 +806,7 @@ int affiliation_by_name(BufferPtr *name) {
 	return -1;
 }
 
-int role_by_name(BufferPtr *name) {
+static int role_by_name(BufferPtr *name) {
 	int role;
 
 	for (role = ROLE_VISITOR; role <= ROLE_MODERATOR; ++role) {
@@ -724,7 +818,7 @@ int role_by_name(BufferPtr *name) {
 	return -1;
 }
 
-void route_iq(Room *room, RouterChunk *chunk) {
+static void route_iq(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
 	ParticipantEntry *sender = 0, *receiver = 0;
@@ -769,7 +863,7 @@ void route_iq(Room *room, RouterChunk *chunk) {
 			}
 		}
 
-		chunk->send.proc(chunk->send.data);
+		SEND(chunk);
 		return;
 	}
 
@@ -945,7 +1039,7 @@ void route_iq(Room *room, RouterChunk *chunk) {
 	if (egress->iq_type) {
 		jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
 		router_cleanup(ingress);
-		chunk->send.proc(chunk->send.data);
+		SEND(chunk);
 		jid_destroy(&egress->to);
 	}
 }

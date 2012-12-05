@@ -34,7 +34,7 @@ extern const int role_name_sizes[];
 typedef struct HistoryEntry {
 	BufferPtr nick, header, inner;
 	time_t delay;
-	struct HistoryEntry *next;
+	struct HistoryEntry *prev, *next;
 } HistoryEntry;
 
 typedef struct AffiliationEntry {
@@ -85,14 +85,16 @@ typedef struct Room {
 	int flags;
 	int default_role;
 	int max_participants;
-	long _unused[7];
+	int max_history_size;
+	int _unused[12];
 
 	ParticipantEntry *participants;
 	int participants_count;
 
 	AffiliationEntry *affiliations[4];
 
-	HistoryEntry *history;
+	HistoryEntry *history, *history_last;
+	int history_entries_count;
 
 	struct Room *prev, *next;
 	pthread_mutex_t sync;
