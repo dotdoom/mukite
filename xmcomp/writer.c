@@ -18,11 +18,11 @@ void *writer_thread_entry(void *void_config) {
 			break;
 		}
 		size = net_send(config->socket, ringbuffer->read_position, size);
+		ringbuffer_release_chunk(ringbuffer, size);
 		if (size < 0 || !config->socket->connected) {
 			LERROR("unrecoverable network error detected, exiting");
 			break;
 		}
-		ringbuffer_release_chunk(ringbuffer, size);
 	}
 	config->enabled = FALSE;
 

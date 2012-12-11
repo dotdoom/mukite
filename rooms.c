@@ -55,6 +55,11 @@ void rooms_init(Rooms *rooms) {
 	pthread_rwlock_init(&rooms->sync, 0);
 }
 
+void rooms_destroy(Rooms *rooms) {
+	pthread_rwlock_destroy(&rooms->sync);
+	// TODO(artem): may want to clean all the rooms
+}
+
 Room *rooms_find(Rooms *rooms, Jid *jid) {
 	Room *room = 0;
 

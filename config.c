@@ -91,6 +91,11 @@ void config_init(Config *config, char *filename) {
 	rooms_init(&config->rooms);
 }
 
+void config_destroy(Config *config) {
+	rooms_destroy(&config->rooms);
+	acl_destroy(&config->acl_config);
+}
+
 void config_apply(Config *config) {
 	int i, error;
 	ParserConfig *parser = 0;

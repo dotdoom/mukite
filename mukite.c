@@ -86,6 +86,14 @@ int main(int argc, char **argv) {
 	sighelper_sigaction(SIGQUIT, terminate);
 	sighelper_sigaction(SIGINT, terminate);
 
+	LDEBUG("allocating writer buffer, size %d", config.writer.buffer);
+	writer_buffer = malloc(config.writer.buffer);
+	ringbuffer_init(&config.writer_thread.ringbuffer,
+			writer_buffer, config.writer.buffer);
+
+	LDEBUG("creating reader queue, size %d", config.reader.queue);
+	queue_init(&config.reader_thread.queue, config.reader.queue);
+
 	while (running) {
 		LINFO("connecting to %s:%d", config.network.host, config.network.port);
 
@@ -109,14 +117,6 @@ int main(int argc, char **argv) {
 		}
 		reconnect_delay = 1;
 
-		LDEBUG("allocating writer buffer, size %d", config.writer.buffer);
-		writer_buffer = malloc(config.writer.buffer);
-		ringbuffer_init(&config.writer_thread.ringbuffer,
-				writer_buffer, config.writer.buffer);
-
-		LDEBUG("creating reader queue, size %d", config.reader.queue);
-		queue_init(&config.reader_thread.queue, config.reader.queue);
-
 		LINFO("creating writer thread");
 		config.writer_thread.socket = &config.socket;
 		config.writer_thread.enabled = TRUE;
@@ -139,13 +139,18 @@ int main(int argc, char **argv) {
 		LDEBUG("joining writer thread");
 		pthread_join(config.writer_thread.thread, 0);
 
-		LINFO("destroying buffers, queues and disconnecting");
-		ringbuffer_destroy(&config.writer_thread.ringbuffer);
-		queue_destroy(&config.reader_thread.queue);
+		LINFO("clearing output buffer and disconnecting");
+		ringbuffer_clear(&config.writer_thread.ringbuffer);
 
 		net_unstream(&config.socket);
 		net_disconnect(&config.socket);
 	}
+
+	LINFO("cleaning up");
+	ringbuffer_destroy(&config.writer_thread.ringbuffer);
+	queue_destroy(&config.reader_thread.queue);
+	free(writer_buffer);
+	config_destroy(&config);
 
 	return 0;
 }

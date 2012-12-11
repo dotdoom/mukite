@@ -46,9 +46,20 @@ BOOL acl_serialize(ACLConfig *acl, FILE *output) {
 	return TRUE;
 }
 
-void acl_entry_destroy(ACLEntry *entry) {
+static void acl_entry_destroy(ACLEntry *entry) {
 	jid_destroy(&entry->jid);
 	free(entry);
+}
+
+void acl_destroy(ACLConfig *acl) {
+	ACLEntry *current = acl->first, *next = 0;
+	while (current) {
+		next = current->next;
+		acl_entry_destroy(current);
+		current = next;
+	}
+	pthread_rwlock_destroy(&acl->sync);
+	acl->first = 0;
 }
 
 BOOL acl_deserialize(ACLConfig *acl, FILE *input, int limit) {

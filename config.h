@@ -62,7 +62,8 @@ typedef struct {
 	ACLConfig acl_config;
 } Config;
 
-void config_init(Config *, char *);
+void config_init(Config *, char *filename);
+void config_destroy(Config *);
 BOOL config_read(Config *);
 void config_apply(Config *);
 

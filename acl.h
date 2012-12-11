@@ -21,6 +21,7 @@ typedef struct {
 } ACLConfig;
 
 void acl_init(ACLConfig *);
+void acl_destroy(ACLConfig *);
 
 int acl_role(ACLConfig *, Jid *);
 BOOL acl_serialize(ACLConfig *, FILE *);
