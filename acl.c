@@ -93,6 +93,7 @@ BOOL acl_deserialize(ACLConfig *acl, FILE *input, int limit) {
 			break;
 		}
 		current = malloc(sizeof(*current));
+		current->next = 0;
 		current->role = role;
 		jid_buffer.end = jid_buffer.data + strlen(jid_buffer.data);
 		if (!jid_struct(&jid_buffer, &current->jid)) {
