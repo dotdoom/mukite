@@ -32,6 +32,15 @@
 #define BUF_PUSH_LITERAL(data) \
 	BUF_PUSH(data, sizeof(data)-1)
 
+#define BUF_PUSH_FMT(format, value) \
+	{ \
+		chunk_size = snprintf(buffer->data_end, buffer->end - buffer->data_end, format, value); \
+		if (chunk_size < 0 || buffer->data_end + chunk_size > buffer->end) { \
+			return FALSE; \
+		} \
+		buffer->data_end += chunk_size - 1; \
+	}
+
 BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 	int i, code, chunk_size;
 	char code_str[3];
@@ -140,7 +149,6 @@ BOOL build_room_info(BuilderBuffer *buffer, Room *room, Buffer *host) {
 
 BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 	int chunk_size;
-	char participants_count[20];
 	Room *room = rooms->start;
 
 	LDEBUG("building component items (list of rooms)");
@@ -151,8 +159,7 @@ BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 		} else {
 			BUF_PUSH_BUF(room->node);
 		}
-		sprintf(participants_count, " (%d)", room->participants_count);
-		BUF_PUSH_STR(participants_count);
+		BUF_PUSH_FMT(" (%d)", room->participants_count);
 		BUF_PUSH_LITERAL("' jid='");
 		BUF_PUSH_BUF(room->node);
 		BUF_PUSH_LITERAL("@");
@@ -306,8 +313,7 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 					break;
 				case BUILD_IQ_LAST:
 					BUF_PUSH_LITERAL("<query xmlns='jabber:iq:last' seconds='");
-					// We assume buffer is always large enough to hold int64
-					buffer->data_end += sprintf(buffer->data_end, "%.0f", packet->iq_last.seconds);
+					BUF_PUSH_FMT("%.0f", packet->iq_last.seconds);
 					BUF_PUSH_LITERAL("'/>");
 					break;
 				case BUILD_IQ_TIME:
