@@ -15,10 +15,10 @@ component.hostname conference.localhost
 # A password for <handshake>
 component.password secret
 
-## Parser options.
-parser.data_file rooms.dat
-parser.threads 7
-parser.buffer 1048576
+## Worker options.
+worker.data_file rooms.dat
+worker.threads 7
+worker.buffer 1048576
 
 ## Reader (executed inside of wrapper) config.
 # Queue size is the maximum number of stanzas being kept ready to be processed.

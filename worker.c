@@ -12,7 +12,7 @@
 #include "builder.h"
 #include "config.h"
 
-#include "parser.h"
+#include "worker.h"
 
 inline BOOL set_type(BufferPtr *value, IncomingPacket *packet) {
 	int value_size = BPT_SIZE(value);
@@ -164,17 +164,17 @@ BOOL send_packet(void *void_local_buffer_storage) {
 		LDEBUG("writing to ringbuffer - complete");
 		return TRUE;
 	} else {
-		LERROR("parser output buffer (%d bytes) is not large enough to hold a stanza - dropped",
+		LERROR("worker output buffer (%d bytes) is not large enough to hold a stanza - dropped",
 				BPT_SIZE(&lbs->buffer));
 		return FALSE;
 	}
 }
 
-void *parser_thread_entry(void *void_parser_config) {
-	ParserConfig *parser_config = (ParserConfig *)void_parser_config;
-	Config *config = (Config *)parser_config->global_config;
+void *worker_thread_entry(void *void_worker_config) {
+	WorkerConfig *worker_config = (WorkerConfig *)void_worker_config;
+	Config *config = (Config *)worker_config->global_config;
 	StanzaQueue *queue = &config->reader_thread.queue;
-	int allocated_buffer_size = config->parser.buffer;
+	int allocated_buffer_size = config->worker.buffer;
 
 	StanzaEntry *stanza_entry;
 	BufferPtr stanza_entry_buffer;
@@ -197,10 +197,10 @@ void *parser_thread_entry(void *void_parser_config) {
 	LINFO("started");
 	sighelper_sigblockall(0);
 
-	while (parser_config->enabled) {
-		if (allocated_buffer_size != config->parser.buffer) {
+	while (worker_config->enabled) {
+		if (allocated_buffer_size != config->worker.buffer) {
 			lbs.buffer.data = realloc(lbs.buffer.data,
-					allocated_buffer_size = config->parser.buffer);
+					allocated_buffer_size = config->worker.buffer);
 			lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
 		}
 

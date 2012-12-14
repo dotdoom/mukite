@@ -1,5 +1,5 @@
-#ifndef PARSER_H
-#define PARSER_H
+#ifndef WORKER_H
+#define WORKER_H
 
 #include <pthread.h>
 
@@ -9,8 +9,8 @@ typedef struct {
 	BOOL enabled;
 	pthread_t thread;
 	void *global_config;
-} ParserConfig;
+} WorkerConfig;
 
-void *parser_thread_entry(void *void_parser_config);
+void *worker_thread_entry(void *void_worker_config);
 
 #endif

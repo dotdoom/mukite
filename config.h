@@ -6,10 +6,10 @@
 #include "xmcomp/writer.h"
 
 #include "rooms.h"
-#include "parser.h"
+#include "worker.h"
 #include "acl.h"
 
-#define PARSERS_COUNT_LIMIT 1024
+#define WORKERS_COUNT_LIMIT 1024
 
 #define CONFIG_OPTION_LENGTH 1024
 
@@ -37,7 +37,7 @@ typedef struct {
 		int threads;
 		int buffer;
 		char data_file[CONFIG_OPTION_LENGTH];
-	} parser;
+	} worker;
 
 	struct {
 		char data_file[CONFIG_OPTION_LENGTH];
@@ -55,8 +55,8 @@ typedef struct {
 
 	struct {
 		int count;
-		ParserConfig threads[PARSERS_COUNT_LIMIT];
-	} parser_threads;
+		WorkerConfig threads[WORKERS_COUNT_LIMIT];
+	} worker_threads;
 
 	Rooms rooms;
 	ACLConfig acl_config;

@@ -23,8 +23,8 @@ static void reload_config(int signal) {
 static void save_data(int signal) {
 	int error;
 	FILE *output = 0;
-	LINFO("received signal %d, saving to the file: '%s'", signal, config.parser.data_file);
-	if ((output = fopen(config.parser.data_file, "w"))) {
+	LINFO("received signal %d, saving to the file: '%s'", signal, config.worker.data_file);
+	if ((output = fopen(config.worker.data_file, "w"))) {
 		if (!rooms_serialize(&config.rooms, output)) {
 			LERROR("serialization failure, probably disk error");
 		}
@@ -38,8 +38,8 @@ static void save_data(int signal) {
 static void load_data() {
 	int error;
 	FILE *input = 0;
-	LINFO("loading from the file: '%s'", config.parser.data_file);
-	if ((input = fopen(config.parser.data_file, "r"))) {
+	LINFO("loading from the file: '%s'", config.worker.data_file);
+	if ((input = fopen(config.worker.data_file, "r"))) {
 		if (!rooms_deserialize(&config.rooms, input, 10000)) {
 			LFATAL("deserialization failure, probably disk error/version mismatch;\n"
 					"please rename or remove the data file to start from scratch");
