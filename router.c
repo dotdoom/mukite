@@ -95,14 +95,17 @@ void component_handle(RouterChunk *chunk) {
 						egress->iq_type = BUILD_IQ_VERSION;
 					} else if (BPT_EQ_LIT("jabber:iq:last", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_LAST;
-						egress->iq_last.seconds = difftime(time(0), chunk->startup);
+						egress->iq_last.seconds = difftime(time(0), chunk->config->startup);
 					} else if (BPT_EQ_LIT("http://jabber.org/protocol/stats", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_STATS;
-						egress->iq_stats_request = node;
+						egress->iq_stats.request = node;
+						egress->iq_stats.rooms = &chunk->config->rooms;
+						egress->iq_stats.ringbuffer = &chunk->config->writer_thread.ringbuffer.stats;
+						egress->iq_stats.queue = &chunk->config->reader_thread.queue.stats;
 					} else if (BPT_EQ_LIT("http://jabber.org/protocol/disco#info", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_DISCO_INFO;
 					} else if (BPT_EQ_LIT("http://jabber.org/protocol/disco#items", &xmlns_attr.value)) {
-						egress->rooms = chunk->rooms;
+						egress->rooms = &chunk->config->rooms;
 						egress->iq_type = BUILD_IQ_DISCO_ITEMS;
 					}
 				}

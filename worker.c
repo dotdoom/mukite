@@ -183,11 +183,10 @@ void *worker_thread_entry(void *void_worker_config) {
 
 	router_chunk.send.proc = send_packet;
 	router_chunk.send.data = &lbs;
-	router_chunk.rooms = &config->rooms;
+	router_chunk.config = config;
 	router_chunk.acl = &config->acl_config;
 	router_chunk.hostname.data = config->component.hostname;
 	router_chunk.hostname.size = strlen(config->component.hostname);
-	router_chunk.startup = time(0);
 
 	lbs.buffer.data = malloc(allocated_buffer_size);
 	lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;

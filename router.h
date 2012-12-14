@@ -31,10 +31,9 @@ typedef struct RouterChunk {
 	IncomingPacket ingress;
 	SendCallback send;
 	Buffer hostname;
-	Rooms *rooms;
 	ACLConfig *acl;
 	BuilderPacket egress;
-	time_t startup;
+	Config *config;
 } RouterChunk;
 
 void router_process(RouterChunk *);

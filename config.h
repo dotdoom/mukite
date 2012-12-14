@@ -60,6 +60,7 @@ typedef struct {
 
 	Rooms rooms;
 	ACLConfig acl_config;
+	time_t startup;
 } Config;
 
 void config_init(Config *, char *filename);

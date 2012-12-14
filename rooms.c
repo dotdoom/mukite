@@ -151,7 +151,7 @@ void rooms_release(Room *room) {
 
 void rooms_route(RouterChunk *chunk) {
 	Room *room = 0;
-	Rooms *rooms = chunk->rooms;
+	Rooms *rooms = &chunk->config->rooms;
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
 

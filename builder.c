@@ -38,12 +38,11 @@
 		if (chunk_size < 0 || buffer->data_end + chunk_size > buffer->end) { \
 			return FALSE; \
 		} \
-		buffer->data_end += chunk_size - 1; \
+		buffer->data_end += chunk_size; \
 	}
 
 BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 	int i, code, chunk_size;
-	char code_str[3];
 
 	BUF_PUSH_LITERAL("<x xmlns='http://jabber.org/protocol/muc#user'><item affiliation='");
 	BUF_PUSH(affiliation_names[node->affiliation], affiliation_name_sizes[node->affiliation]);
@@ -60,44 +59,46 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 
 	for (i = 0; i < node->status_codes_count && (code = node->status_codes[i]); ++i) {
 		BUF_PUSH_LITERAL("'/><status code='");
-		code_str[2] = code % 10 + '0';
-		code /= 10;
-		code_str[1] = code % 10 + '0';
-		code /= 10;
-		code_str[0] = code + '0';
-		BUF_PUSH(code_str, 3);
+		BUF_PUSH_FMT("%d", code);
 	}
 
 	BUF_PUSH_LITERAL("'/></x>");
 	return TRUE;
 }
 
-BOOL build_stats(BuilderBuffer *buffer) {
+#define BUF_PUSH_STAT(category, value) \
+	BUF_PUSH_LITERAL("<stat name='" #category "/" #value "' unit='times' value='"); \
+	BUF_PUSH_FMT("%d", data->iq_stats.category->value); \
+	BUF_PUSH_LITERAL("'/>");
+
+BOOL build_stats(BuilderBuffer *buffer, BuilderPacket *data) {
+	int chunk_size;
+
+	BUF_PUSH_STAT(rooms, count);
+	BUF_PUSH_STAT(queue, overflows);
+	BUF_PUSH_STAT(queue, underflows);
+	BUF_PUSH_STAT(queue, realloc_enlarges);
+	BUF_PUSH_STAT(queue, realloc_shortens);
+	BUF_PUSH_STAT(queue, mallocs);
+	BUF_PUSH_STAT(queue, data_pushes);
+	BUF_PUSH_STAT(queue, data_pops);
+	BUF_PUSH_STAT(queue, free_pushes);
+	BUF_PUSH_STAT(queue, free_pops);
+	BUF_PUSH_STAT(ringbuffer, underflows);
+	BUF_PUSH_STAT(ringbuffer, overflows);
+	BUF_PUSH_STAT(ringbuffer, reads);
+
 	/*
 
 <stat name='time/uptime'/>
-<stat name='queue/overflows'/>
-<stat name='queue/underflows'/>
-<stat name='queue/realloc/enlarges'/>
-<stat name='queue/realloc/shortens'/>
-<stat name='queue/mallocs'/>
-<stat name='queue/data/push'/>
-<stat name='queue/data/pop'/>
-<stat name='queue/free/push'/>
-<stat name='queue/free/pop'/>
-<stat name='ringbuffer/underflows'/>
-<stat name='ringbuffer/overflows'/>
-<stat name='ringbuffer/writes'/>
-<stat name='ringbuffer/data'/>
-<stat name='ringbuffer/size'/>
-<stat name='muc/rooms'/>
 <stat name='muc/users'/>
 <stat name='muc/jids'/>
 
 
 <stat name='time/uptime' unit='seconds' value='1024'/>
 	 */
-	return FALSE;
+
+	return TRUE;
 }
 
 BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
@@ -322,6 +323,13 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 						return FALSE;
 					}
 					BUF_PUSH_LITERAL("</time>");
+					break;
+				case BUILD_IQ_STATS:
+					BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/stats'>");
+					if (!build_stats(buffer, packet)) {
+						return FALSE;
+					}
+					BUF_PUSH_LITERAL("</query>");
 					break;
 				case BUILD_IQ_DISCO_INFO:
 				case BUILD_IQ_ROOM_DISCO_INFO:

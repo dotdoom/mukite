@@ -88,6 +88,7 @@ void config_init(Config *config, char *filename) {
 	config->writer.buffer = 1 << 20;
 	config->worker.threads = 3;
 	config->worker.buffer = 1 << 20;
+	config->startup = time(0);
 	rooms_init(&config->rooms);
 }
 

@@ -2,6 +2,8 @@
 #define BUILDER_H
 
 #include "xmcomp/common.h"
+#include "xmcomp/queue.h"
+#include "xmcomp/ringbuffer.h"
 
 #include "rooms.h"
 #include "room.h"
@@ -64,7 +66,12 @@ typedef struct {
 		} iq_last;
 
 		// iq_type = BUILD_IQ_STATS
-		BufferPtr iq_stats_request;
+		struct {
+			BufferPtr request;
+			RingBufferStats *ringbuffer;
+			StanzaQueueStats *queue;
+			Rooms *rooms;
+		} iq_stats;
 		
 		// iq_type = BUILD_IQ_DISCO_*
 		Rooms *rooms;
