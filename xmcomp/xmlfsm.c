@@ -5,7 +5,7 @@
 #include "xmlfsm.h"
 
 #define VALIDATE_END \
-	{ if (buffer->data == buffer->end) { return XMLPARSE_FAULT; } }
+	{ if (buffer->data == buffer->end) { return XMLPARSE_FAILURE; } }
 
 #define INC_UTF8(value, length) \
 	switch ((value) & 0xFC) { \
@@ -75,7 +75,7 @@ int xmlfsm_skip_node(BufferPtr *buffer, int level, BufferPtr *real_buffer) {
 	}
 
 	buffer->data = orig_start;
-	return XMLPARSE_FAULT;
+	return XMLPARSE_FAILURE;
 }
 
 #define WHITESPACE(c) \

@@ -65,7 +65,7 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 	packet->header.data = buffer->data;
 
 	// Parse stanza name
-	if (xmlfsm_node_name(buffer, &stanza_name) == XMLPARSE_FAULT) {
+	if (xmlfsm_node_name(buffer, &stanza_name) == XMLPARSE_FAILURE) {
 		LWARN("dropping: stanza name parsing failure");
 		return FALSE;
 	}
@@ -110,7 +110,7 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 			++erase_index;
 		}
 	}
-	if (retval == XMLPARSE_FAULT) {
+	if (retval == XMLPARSE_FAILURE) {
 		LWARN("dropping: attr parsing failure");
 		return FALSE;
 	}

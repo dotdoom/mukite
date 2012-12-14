@@ -46,8 +46,7 @@ int realloc_ring_buffer(BufferPtr *buffer, BufferPtr *data, int new_size) {
 
 inline int get_continuous_block(BufferPtr *buffer, BufferPtr *data, char **continuous_buffer) {
 	if (data->end == data->data) {
-		data->end = data->data = buffer->data;
-		*continuous_buffer = buffer->data;
+		*continuous_buffer = data->data = data->end = buffer->data;
 		return BPT_SIZE(buffer);
 	}
 
@@ -61,8 +60,9 @@ inline int get_continuous_block(BufferPtr *buffer, BufferPtr *data, char **conti
 		return buffer->end - data->end;
 	}
 
+	// Reversed: data->end < data->data
 	*continuous_buffer = data->end;
-	return BPT_SIZE(data);
+	return data->data - data->end;
 }
 
 static void sigusr2_handler(int signal) {
@@ -192,12 +192,7 @@ void *reader_thread_entry(void *void_config) {
 			break;
 		}
 
-		network_data.end += bytes_received;
-		if (network_data.end > network_buffer.end) {
-			network_data.end -= network_buffer_size;
-		}
-
-		current_stanza = network_data.data;
+		network_data.end = continuous_block + bytes_received;
 	}
 	config->enabled = FALSE;
 
