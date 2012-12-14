@@ -5,6 +5,10 @@
 
 #include "jid.h"
 
+// In this file 'strncasecmp' is used instead of 'memcmp' to provide case-insensitive JID comparison.
+// Though 'strncasecmp' stops at NULL character,
+// stringprep profile of JID prohibits it's usage, so we should be fine.
+
 void jid_init(Jid *jid) {
 	BPT_INIT(&jid->node);
 	BPT_INIT(&jid->host);
@@ -80,7 +84,7 @@ int jid_cmp(Jid *jid1, Jid *jid2, int mode) {
 			return 1;
 		}
 
-		if (memcmp(jid1->node.data, jid2->node.data, size)) {
+		if (strncasecmp(jid1->node.data, jid2->node.data, size)) {
 			LDEBUG("nodes differ");
 			return 1;
 		}
@@ -92,7 +96,7 @@ int jid_cmp(Jid *jid1, Jid *jid2, int mode) {
 			return 1;
 		}
 
-		if (memcmp(jid1->host.data, jid2->host.data, size)) {
+		if (strncasecmp(jid1->host.data, jid2->host.data, size)) {
 			LDEBUG("hosts differ: '%.*s' and '%.*s'",
 					size, jid1->host.data,
 					size, jid2->host.data);
@@ -111,7 +115,7 @@ int jid_cmp(Jid *jid1, Jid *jid2, int mode) {
 			return 1;
 		}
 
-		if (memcmp(jid1->resource.data, jid2->resource.data, size)) {
+		if (strncasecmp(jid1->resource.data, jid2->resource.data, size)) {
 			LDEBUG("resources differ");
 			return 1;
 		}
@@ -143,7 +147,7 @@ int jid_strcmp(Jid *jid, Buffer *str, int part) {
 	}
 
 	if (BPT_SIZE(local) == str->size) {
-		return memcmp(local->data, str->data, str->size);
+		return strncasecmp(local->data, str->data, str->size);
 	} else {
 		return 1;
 	}
