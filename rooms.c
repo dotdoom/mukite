@@ -17,8 +17,8 @@ static XMPPError error_definitions[] = {
 #define ERROR_ROOM_CREATE_PERMISSION 1
 		.code = "403",
 		.name = "forbidden",
-		.type = "cancel",
-		.text = "Room creation is denied by service policy"
+		.type = "auth",
+		.text = "Room creation is denied by the service policy"
 	}
 };
 
@@ -166,7 +166,11 @@ void rooms_route(RouterChunk *chunk) {
 			if ((acl_role(chunk->acl, &ingress->real_from) & ACL_MUC_CREATE) == ACL_MUC_CREATE) {
 				room = rooms_create(rooms, &ingress->proxy_to);
 			} else {
+				buffer__ptr_cpy(&egress->from_node, &ingress->proxy_to.node);
+				buffer_ptr_cpy(&egress->from_nick, &ingress->proxy_to.resource);
 				router_error(chunk, &error_definitions[ERROR_ROOM_CREATE_PERMISSION]);
+				free(egress->from_node.data);
+				free(egress->from_nick.data);
 				return;
 			}
 		}

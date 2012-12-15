@@ -50,3 +50,9 @@ void buffer_ptr__cpy(BufferPtr *to, Buffer *from) {
 	to->end = to->data + from->size;
 	memcpy(to->data, from->data, from->size);
 }
+
+void buffer__ptr_cpy(Buffer *to, BufferPtr *from) {
+	to->size = BPT_SIZE(from);
+	to->data = malloc(to->size);
+	memcpy(to->data, from->data, to->size);
+}

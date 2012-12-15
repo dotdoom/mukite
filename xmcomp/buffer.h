@@ -48,5 +48,6 @@ BOOL buffer_ptr_serialize(BufferPtr *, FILE *);
 BOOL buffer_ptr_deserialize(BufferPtr *, FILE *, int);
 void buffer_ptr_cpy(BufferPtr *to, BufferPtr *from);
 void buffer_ptr__cpy(BufferPtr *to, Buffer *from);
+void buffer__ptr_cpy(Buffer *to, BufferPtr *from);
 
 #endif
