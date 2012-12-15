@@ -20,6 +20,7 @@ int xmlfsm_skip_node(BufferPtr *buffer, int level, BufferPtr *real_buffer) {
 	char *tag_closing_pos = 0, *orig_start = buffer->data;
 	int nesting_level = 0;
 	char quote_char = 0;
+	BOOL tag = FALSE;
 	char *current_end =
 		(real_buffer && buffer->data > buffer->end) ?
 		real_buffer->end : // Wrap on the ring buffer border
@@ -47,12 +48,15 @@ int xmlfsm_skip_node(BufferPtr *buffer, int level, BufferPtr *real_buffer) {
 			switch (*buffer->data) {
 				case '<':
 					++nesting_level;
+					tag = TRUE;
 					break;
 				case '/':
-					tag_closing_pos = buffer->data;
+					if (tag) {
+						tag_closing_pos = buffer->data;
+					}
 					break;
 				case '>':
-					if (tag_closing_pos) {
+					if (tag && tag_closing_pos) {
 						--nesting_level;
 						if (buffer->data - tag_closing_pos != 1) {
 							// This is not an empty node
@@ -65,6 +69,7 @@ int xmlfsm_skip_node(BufferPtr *buffer, int level, BufferPtr *real_buffer) {
 						}
 						tag_closing_pos = 0;
 					}
+					tag = FALSE;
 					break;
 				case '"':
 				case '\'':
