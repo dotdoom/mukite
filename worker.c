@@ -119,18 +119,18 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 		return FALSE;
 	}
 	if (packet->name == 'm' || packet->name == 'p') {
-		if (!packet->proxy_to.node.data) {
+		if (BPT_BLANK(&packet->proxy_to.node)) {
 			// Messages and presences MUST contain room node name
 			LDEBUG("dropping: message/presence without node name");
 			return FALSE;
 		}
-		if (packet->type == 'p' && BUF_EMPTY(&packet->proxy_to.resource)) {
+		if (packet->type == 'p' && BPT_BLANK(&packet->proxy_to.resource)) {
 			// Presence should contain nickname as resource
 			LDEBUG("dropping: presence without nickname");
 			return FALSE;
 		}
 		if (packet->name == 'm' &&
-				(BUF_EMPTY(&packet->proxy_to.resource) == (packet->type == 'c'))) {
+				(BPT_BLANK(&packet->proxy_to.resource) == (packet->type == 'c'))) {
 			// The nickname (resource) is specified and type is not c(hat) - thus g(roupchat)
 			LDEBUG("dropping: wrong message type");
 			return FALSE;

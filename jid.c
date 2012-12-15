@@ -49,18 +49,12 @@ BOOL jid_struct(BufferPtr *jid_string, Jid *jid_struct) {
 		jid_struct->host.end = current;
 	}
 
-	if (!jid_struct->host.data ||
+	if (BPT_BLANK(&jid_struct->host) ||
 			(BPT_SIZE(&jid_struct->host) > MAX_JID_PART_SIZE) ||
 			(BPT_SIZE(&jid_struct->node) > MAX_JID_PART_SIZE) ||
 			(BPT_SIZE(&jid_struct->resource) > MAX_JID_PART_SIZE)) {
 		return FALSE;
 	}
-
-	LDEBUG("split the JID '%.*s': node '%.*s', host '%.*s', resource '%.*s'",
-			JID_LEN(jid_struct), JID_STR(jid_struct),
-			BPT_EMPTY(&jid_struct->node) ? 0 : BPT_SIZE(&jid_struct->node), jid_struct->node.data,
-			BPT_SIZE(&jid_struct->host), jid_struct->host.data,
-			BPT_EMPTY(&jid_struct->resource) ? 0 : BPT_SIZE(&jid_struct->resource), jid_struct->resource.data);
 
 	return TRUE;
 }
@@ -68,60 +62,43 @@ BOOL jid_struct(BufferPtr *jid_string, Jid *jid_struct) {
 int jid_cmp(Jid *jid1, Jid *jid2, int mode) {
 	int size;
 
-	LDEBUG("comparing JIDs: '%.*s' <=> '%.*s', mode %d",
-			JID_LEN(jid1), JID_STR(jid1),
-			JID_LEN(jid2), JID_STR(jid2),
-			mode);
-
 	if ((mode & JID_NODE) && (jid1->node.data || !(mode & JID_CMP_NULLWC))) {
 		if (!jid1->node.data || !jid2->node.data) {
-			LDEBUG("node NULLWC trial");
 			return jid1->node.data != jid2->node.data;
 		}
 
 		if ((size = BPT_SIZE(&jid1->node)) != BPT_SIZE(&jid2->node)) {
-			LDEBUG("node sizes differ");
 			return 1;
 		}
 
 		if (strncasecmp(jid1->node.data, jid2->node.data, size)) {
-			LDEBUG("nodes differ");
 			return 1;
 		}
 	}
 
 	if (mode & JID_HOST) {
 		if ((size = BPT_SIZE(&jid1->host)) != BPT_SIZE(&jid2->host)) {
-			LDEBUG("host sizes differ");
 			return 1;
 		}
 
 		if (strncasecmp(jid1->host.data, jid2->host.data, size)) {
-			LDEBUG("hosts differ: '%.*s' and '%.*s'",
-					size, jid1->host.data,
-					size, jid2->host.data);
 			return 1;
 		}
 	}
 
 	if ((mode & JID_RESOURCE) && (jid1->resource.data || !(mode & JID_CMP_NULLWC))) {
 		if (!jid1->resource.data || !jid2->resource.data) {
-			LDEBUG("resources may differ (WC)");
 			return jid1->resource.data != jid2->resource.data;
 		}
 
 		if ((size = BPT_SIZE(&jid1->resource)) != BPT_SIZE(&jid2->resource)) {
-			LDEBUG("resource sizes differ");
 			return 1;
 		}
 
 		if (strncasecmp(jid1->resource.data, jid2->resource.data, size)) {
-			LDEBUG("resources differ");
 			return 1;
 		}
 	}
-
-	LDEBUG("JIDs are equal");
 
 	return 0;
 }

@@ -27,7 +27,7 @@
 	BUF_PUSH((bptr).data, BPT_SIZE(&(bptr)))
 
 #define BUF_PUSH_IFBPT(bptr) \
-	{ if ((bptr).data) { BUF_PUSH_BPT(bptr) } }
+	{ if (!BPT_NULL(&bptr)) { BUF_PUSH_BPT(bptr) } }
 
 #define BUF_PUSH_LITERAL(data) \
 	BUF_PUSH(data, sizeof(data)-1)
@@ -52,7 +52,7 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 		BUF_PUSH_LITERAL("' jid='");
 		BUF_PUSH(JID_STR(node->jid), JID_LEN(node->jid));
 	}
-	if (node->nick.data) {
+	if (!BPT_NULL(&node->nick)) {
 		BUF_PUSH_LITERAL("' nick='");
 		BUF_PUSH_BPT(node->nick);
 	}
@@ -246,12 +246,12 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 
 	BUF_PUSH_BPT(packet->header);
 	BUF_PUSH_LITERAL(" from='");
-	if (packet->from_node.data) {
+	if (!BUF_NULL(&packet->from_node)) {
 		BUF_PUSH_BUF(packet->from_node);
 		BUF_PUSH_LITERAL("@");
 	}
 	BUF_PUSH_BUF(packet->from_host);
-	if (packet->from_nick.data) {
+	if (!BUF_NULL(&packet->from_nick)) {
 		BUF_PUSH_LITERAL("/");
 		BUF_PUSH_BUF(packet->from_nick);
 	}

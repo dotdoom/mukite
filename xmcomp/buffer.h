@@ -13,10 +13,10 @@ typedef struct {
 		(b)->data = 0; \
 		(b)->size = 0; \
 	}
-#define BUF_END(b) \
-	((b)->data + (b)->size)
-#define BUF_EMPTY(b) \
-	(!(b)->data)
+#define BUF_END(b) ((b)->data + (b)->size)
+#define BUF_NULL(b) (!(b)->data)
+#define BUF_EMPTY(b) (!(b)->size)
+#define BUF_BLANK(b) (BUF_NULL(b) || BUF_EMPTY(b))
 #define BUF_EQ_LIT(literal, b) \
 	(sizeof(literal)-1 == (b)->size && \
 	 !memcmp((literal), (b)->data, sizeof(literal)-1))
@@ -31,10 +31,10 @@ typedef struct {
 		(bptr)->data = 0; \
 		(bptr)->end = 0; \
 	}
-#define BPT_SIZE(bptr) \
-	((int)((bptr)->end - (bptr)->data))
-#define BPT_EMPTY(bptr) \
-	(!(bptr)->data)
+#define BPT_SIZE(bptr) ((int)((bptr)->end - (bptr)->data))
+#define BPT_NULL(bptr) (!(bptr)->data)
+#define BPT_EMPTY(bptr) (!BPT_SIZE(bptr))
+#define BPT_BLANK(bptr) (BPT_NULL(bptr) || BPT_EMPTY(bptr))
 #define BPT_EQ_LIT(literal, bptr) \
 	(sizeof(literal)-1 == BPT_SIZE(bptr) && \
 	 !memcmp((literal), (bptr)->data, sizeof(literal)-1))
