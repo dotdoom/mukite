@@ -8,6 +8,7 @@
 
 #include "jid.h"
 
+#define ROLE_UNCHANGED -2
 #define ROLE_NONE 0
 #define ROLE_VISITOR 1
 #define ROLE_PARTICIPANT 2
@@ -16,6 +17,7 @@
 extern const char** affiliation_names;
 extern const int* affiliation_name_sizes;
 
+#define AFFIL_UNCHANGED -2
 #define AFFIL_NONE -1
 #define AFFIL_OUTCAST 0
 #define AFFIL_MEMBER 1

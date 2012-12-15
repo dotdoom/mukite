@@ -590,7 +590,25 @@ static void room_history_send(Room *room, RouterChunk *chunk, HistoryEntry *hist
 
 static BOOL admin_action_allowed(ParticipantEntry *source, ParticipantEntry *target,
 		int new_affiliation, int new_role) {
-	return FALSE;
+	if (source->role != ROLE_MODERATOR) {
+		return FALSE;
+	}
+	if (source->affiliation == AFFIL_OWNER) {
+		// if changing affiliation to admin+, leave role untouched or promote to moderator
+		return new_affiliation == AFFIL_UNCHANGED ||
+			(new_affiliation >= AFFIL_ADMIN &&
+			 (new_role == ROLE_UNCHANGED || new_role == ROLE_MODERATOR));
+	}
+	if (source->affiliation == AFFIL_ADMIN) {
+		return target->affiliation < AFFIL_ADMIN &&
+				new_affiliation < AFFIL_ADMIN;
+	}
+	// moderator
+	return
+		target->affiliation < AFFIL_ADMIN &&
+		target->role < ROLE_MODERATOR &&
+		new_affiliation == AFFIL_UNCHANGED &&
+		new_role < ROLE_MODERATOR;
 }
 
 static void route_message(Room *room, RouterChunk *chunk) {
@@ -830,7 +848,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 	Jid jid;
 
 	sender = room_participant_by_jid(room, &ingress->real_from);
-	if (!BUF_EMPTY(&ingress->proxy_to.resource)) {
+	if (!BPT_EMPTY(&ingress->proxy_to.resource)) {
 		LDEBUG("trying to use iq proxy to forward the stanza");
 
 		// iq directed to participant - just proxying
