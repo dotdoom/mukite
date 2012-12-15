@@ -89,6 +89,7 @@ Room *rooms_create(Rooms *rooms, Jid *jid) {
 		rooms->start = room;
 	}
 	rooms->end = room;
+	++rooms->count;
 	pthread_rwlock_unlock(&rooms->sync);
 
 	return room;
@@ -138,6 +139,7 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
 		room_deserialize(new_entry, input),
 	);
 	rooms->end = new_entry;
+	rooms->count = entry_count;
 	return TRUE;
 }
 
