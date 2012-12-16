@@ -77,6 +77,9 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 		return FALSE;
 	}
 	packet->name = *stanza_name.data;
+	packet->header.data +=
+		(packet->name == 'm' ? 8 :
+		 packet->name == 'p' ? 9 : 3);
 	packet->header.end = buffer->data;
 
 	// Parse attrs

@@ -244,6 +244,18 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 
 	LDEBUG("building packet: started");
 
+	switch (packet->name) {
+		case 'm':
+			BUF_PUSH_LITERAL("<message");
+			break;
+		case 'p':
+			BUF_PUSH_LITERAL("<presence");
+			break;
+		case 'i':
+			BUF_PUSH_LITERAL("<iq");
+			break;
+	}
+
 	BUF_PUSH_BPT(packet->header);
 	BUF_PUSH_LITERAL(" from='");
 	if (!BUF_NULL(&packet->from_node)) {

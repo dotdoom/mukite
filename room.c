@@ -495,9 +495,9 @@ BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallback *se
 	ParticipantEntry *receiver = room->participants;
 
 	egress->name = 'p';
-	if (sender->role == ROLE_NONE) {
-		egress->type = 'u';
-	}
+	egress->from_nick = sender->nick;
+	egress->participant.affiliation = sender->affiliation;
+	egress->participant.role = sender->role;
 
 	for (; receiver; receiver = receiver->next) {
 		if (receiver == sender) {
@@ -711,9 +711,6 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 			if (ingress->type != 'u') {
 				// TODO(artem): check globally registered nickname
 
-				egress->from_nick = sender->nick;
-				egress->participant.affiliation = sender->affiliation;
-				egress->participant.role = sender->role;
 				buffer_ptr_cpy(&new_nick, &ingress->proxy_to.resource);
 				egress->participant.nick = new_nick;
 				egress->user_data = ingress->inner;
@@ -800,9 +797,6 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	}
 
 	// Broadcast sender's presence to all participants
-	egress->participant.affiliation = sender->affiliation;
-	egress->participant.role = sender->role;
-	egress->from_nick = sender->nick;
 	egress->user_data = ingress->inner;
 	room_broadcast_presence(room, egress, &chunk->send, sender);
 
@@ -841,7 +835,7 @@ static int affiliation_by_name(BufferPtr *name) {
 static int role_by_name(BufferPtr *name) {
 	int role;
 
-	for (role = ROLE_VISITOR; role <= ROLE_MODERATOR; ++role) {
+	for (role = ROLE_NONE; role <= ROLE_MODERATOR; ++role) {
 		if (BPT_EQ_BIN(role_names[role], name, role_name_sizes[role])) {
 			return role;
 		}
@@ -898,7 +892,7 @@ static int next_muc_admin_item(BufferPtr *node, ParticipantEntry *target) {
 static void route_iq(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
-	ParticipantEntry *sender = 0, *receiver = 0, target;
+	ParticipantEntry *sender = 0, *receiver = 0, *affected_participant = 0, target;
 
 	BufferPtr buffer, node, node_attr_value = BPT_INITIALIZER;
 	Buffer node_name;
@@ -1052,6 +1046,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 
 					egress->iq_type = BUILD_IQ_ROOM_AFFILIATIONS;
 					egress->muc_items.items = 0;
+					affected_participant = receiver;
 				}
 
 				if (target.affiliation != AFFIL_UNCHANGED) {
@@ -1068,6 +1063,19 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 		router_cleanup(ingress);
 		SEND(&chunk->send);
 		jid_destroy(&egress->to);
+	}
+
+	if (affected_participant) {
+		if (affected_participant->role == ROLE_NONE) {
+			builder_push_status_code(&egress->participant, STATUS_KICKED);
+			egress->type = 'u';
+		} else {
+			egress->type = '\0';
+		}
+		room_broadcast_presence(room, egress, &chunk->send, affected_participant);
+		if (affected_participant->role == ROLE_NONE) {
+			room_leave(room, affected_participant);
+		}
 	}
 }
 

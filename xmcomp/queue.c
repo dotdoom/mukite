@@ -58,10 +58,10 @@ inline void queue_push_data(StanzaQueue *queue, StanzaEntry *stanza) {
 	stanza->next = 0;
 	if (queue->data_end_queue) {
 		queue->data_end_queue->next = stanza;
-		queue->data_end_queue = stanza;
 	} else {
-		queue->data_end_queue = queue->data_start_queue = stanza;
+		queue->data_start_queue = stanza;
 	}
+	queue->data_end_queue = stanza;
 	++queue->stats.data_pushes;
 	pthread_cond_signal(&sync->data_available_cv);
 	pthread_mutex_unlock(&sync->data_queue_mutex);
