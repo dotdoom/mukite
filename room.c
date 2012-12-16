@@ -40,6 +40,7 @@ const int role_name_sizes[] = {
 	9
 };
 
+// http://xmpp.org/extensions/xep-0045.html#registrar-statuscodes-init
 #define STATUS_NON_ANONYMOUS 100
 #define STATUS_SELF_PRESENCE 110
 #define STATUS_LOGGING_ENABLED 170
