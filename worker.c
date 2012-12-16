@@ -124,7 +124,7 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 			LDEBUG("dropping: message/presence without node name");
 			return FALSE;
 		}
-		if (packet->type == 'p' && BPT_BLANK(&packet->proxy_to.resource)) {
+		if (packet->name == 'p' && BPT_BLANK(&packet->proxy_to.resource)) {
 			// Presence should contain nickname as resource
 			LDEBUG("dropping: presence without nickname");
 			return FALSE;
