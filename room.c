@@ -128,10 +128,16 @@ static XMPPError error_definitions[] = {
 		.name = "resource-constraint",
 		.type = "wait",
 		.text = "Traffic rate limit exceeded"
+	}, {
+#define ERROR_NO_VISITORS_PRESENCE 13
+		.code = "403",
+		.name = "forbidden",
+		.type = "cancel",
+		.text = "Visitors are not allowed to update their presence in this room"
 	}
 };
 
-#define SEND(chunk) (chunk)->send.proc((chunk)->send.data)
+#define SEND(send) (send)->proc((send)->data)
 
 void room_init(Room *room, BufferPtr *node) {
 	memset(room, 0, sizeof(*room));
@@ -190,9 +196,7 @@ ParticipantEntry *room_join(Room *room, Jid *jid, BufferPtr *nick, int affiliati
 
 	jid_cpy(&participant->jid, jid, JID_FULL);
 
-	participant->nick.size = BPT_SIZE(nick);
-	participant->nick.data = malloc(participant->nick.size);
-	memcpy(participant->nick.data, nick->data, participant->nick.size);
+	buffer_ptr_cpy(&participant->nick, nick);
 
 	if (room->participants) {
 		room->participants->prev = participant;
@@ -223,7 +227,7 @@ void room_leave(Room *room, ParticipantEntry *participant) {
 	}
 
 	LDEBUG("participant #%d '%.*s' (JID '%.*s') has left '%.*s'",
-			room->participants_count, participant->nick.size, participant->nick.data,
+			room->participants_count, BPT_SIZE(&participant->nick), participant->nick.data,
 			JID_LEN(&participant->jid), JID_STR(&participant->jid),
 			room->node.size, room->node.data);
 	--room->participants_count;
@@ -236,10 +240,11 @@ void room_leave(Room *room, ParticipantEntry *participant) {
 }
 
 ParticipantEntry *room_participant_by_nick(Room *room, BufferPtr *nick) {
+	int size = BPT_SIZE(nick);
 	ParticipantEntry *current = room->participants;
 	for (; current; current = current->next) {
-		if (current->nick.size == BPT_SIZE(nick) &&
-				!memcmp(current->nick.data, nick->data, current->nick.size)) {
+		if (BPT_SIZE(&current->nick) == size &&
+				!memcmp(current->nick.data, nick->data, size)) {
 			return current;
 		}
 	}
@@ -273,7 +278,7 @@ BOOL participants_serialize(ParticipantEntry *list, FILE *output) {
 	LDEBUG("serializing participant list");
 	SERIALIZE_LIST(
 		jid_serialize(&list->jid, output) &&
-		buffer_serialize(&list->nick, output) &&
+		buffer_ptr_serialize(&list->nick, output) &&
 		buffer_ptr_serialize(&list->presence, output) &&
 		SERIALIZE_BASE(list->affiliation) &&
 		SERIALIZE_BASE(list->role)
@@ -288,7 +293,7 @@ BOOL participants_deserialize(Room *room, FILE *input, int limit) {
 	LDEBUG("deserializing participant list");
 	DESERIALIZE_LIST(
 		jid_deserialize(&new_entry->jid, input) &&
-		buffer_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE) &&
+		buffer_ptr_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE) &&
 		buffer_ptr_deserialize(&new_entry->presence, input, REASONABLE_RAW_LIMIT) &&
 		DESERIALIZE_BASE(new_entry->affiliation) &&
 		DESERIALIZE_BASE(new_entry->role),
@@ -461,10 +466,10 @@ void send_to_participants(RouterChunk *chunk, ParticipantEntry *participant, int
 	int sent = 0;
 	for (; participant && sent < limit; participant = participant->next, ++sent) {
 		LDEBUG("routing stanza to '%.*s', real JID '%.*s'",
-				participant->nick.size, participant->nick.data,
+				BPT_SIZE(&participant->nick), participant->nick.data,
 				JID_LEN(&participant->jid), JID_STR(&participant->jid));
 		chunk->egress.to = participant->jid;
-		SEND(chunk);
+		SEND(&chunk->send);
 	}
 }
 
@@ -484,28 +489,33 @@ BOOL room_attach_config_status_codes(Room *room, MucAdmNode *participant) {
 	return TRUE;
 }
 
-BOOL room_broadcast_presence(Room *room, BuilderPacket *output, SendCallback *send, ParticipantEntry *sender) {
-	int orig_status_codes_count = output->participant.status_codes_count;
+BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallback *send, ParticipantEntry *sender) {
+	int orig_status_codes_count = egress->participant.status_codes_count;
 	ParticipantEntry *receiver = room->participants;
+
+	egress->name = 'p';
+	if (sender->role == ROLE_NONE) {
+		egress->type = 'u';
+	}
 
 	for (; receiver; receiver = receiver->next) {
 		if (receiver == sender) {
-			if (!room_attach_config_status_codes(room, &output->participant)) {
+			if (!room_attach_config_status_codes(room, &egress->participant)) {
 				LERROR("[BUG] unexpected status codes buffer overflow when trying to push room config");
 				return FALSE;
 			}
-			builder_push_status_code(&output->participant, STATUS_SELF_PRESENCE);
+			builder_push_status_code(&egress->participant, STATUS_SELF_PRESENCE);
 		} else {
-			output->participant.status_codes_count = orig_status_codes_count;
+			egress->participant.status_codes_count = orig_status_codes_count;
 		}
-		output->to = receiver->jid;
+		egress->to = receiver->jid;
 		if (receiver->role == ROLE_MODERATOR ||
 				(room->flags & MUC_FLAG_SEMIANONYMOUS) != MUC_FLAG_SEMIANONYMOUS) {
-			output->participant.jid = &sender->jid;
+			egress->participant.jid = &sender->jid;
 		} else {
-			output->participant.jid = 0;
+			egress->participant.jid = 0;
 		}
-		send->proc(send->data);
+		SEND(send);
 	}
 	return TRUE;
 }
@@ -518,7 +528,7 @@ void history_push(Room *room, RouterChunk *chunk, ParticipantEntry *sender) {
 
 	new_item = malloc(sizeof(*new_item));
 	memset(new_item, 0, sizeof(*new_item));
-	buffer_ptr__cpy(&new_item->nick, &sender->nick);
+	buffer_ptr_cpy(&new_item->nick, &sender->nick);
 	buffer_ptr_cpy(&new_item->header, &chunk->ingress.header);
 	buffer_ptr_cpy(&new_item->inner, &chunk->ingress.inner);
 	new_item->delay = 1; // TODO(artem): put a real timestamp in new_item->delay
@@ -579,16 +589,15 @@ static void room_history_send(Room *room, RouterChunk *chunk, HistoryEntry *hist
 	egress->to = receiver->jid;
 
 	for (; history; history = history->next) {
-		egress->from_nick.data = history->nick.data;
-		egress->from_nick.size = BPT_SIZE(&history->nick);
+		egress->from_nick = history->nick;
 		egress->header = history->header;
 		egress->user_data = history->inner;
 		egress->delay = history->delay;
-		SEND(chunk);
+		SEND(&chunk->send);
 	}
 }
 
-static BOOL admin_action_allowed(ParticipantEntry *source, ParticipantEntry *target,
+static BOOL muc_admin_action_allowed(ParticipantEntry *source, ParticipantEntry *target,
 		int new_affiliation, int new_role) {
 	if (source->role != ROLE_MODERATOR) {
 		return FALSE;
@@ -622,7 +631,7 @@ static void route_message(Room *room, RouterChunk *chunk) {
 	}
 
 	LDEBUG("user '%.*s', real JID '%.*s' is sending a message",
-			sender->nick.size, sender->nick.data,
+			BPT_SIZE(&sender->nick), sender->nick.data,
 			JID_LEN(&sender->jid), JID_STR(&sender->jid));
 
 	egress->from_nick = sender->nick;
@@ -639,7 +648,7 @@ static void route_message(Room *room, RouterChunk *chunk) {
 		}
 
 		LDEBUG("sending private message to '%.*s', real JID '%.*s'",
-				receiver->nick.size, receiver->nick.data,
+				BPT_SIZE(&receiver->nick), receiver->nick.data,
 				JID_LEN(&receiver->jid), JID_STR(&receiver->jid));
 		router_cleanup(ingress);
 		send_to_participants(chunk, receiver, 1);
@@ -683,6 +692,13 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	}
 
 	if ((sender = room_participant_by_jid(room, &ingress->real_from))) {
+		if (sender->role == ROLE_VISITOR &&
+				(room->flags & MUC_FLAG_VISITORPRESENCE) != MUC_FLAG_VISITORPRESENCE) {
+			// Visitors not allowed to update presence
+			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PRESENCE]);
+			return;
+		}
+
 		// Sender is already a participant
 		if ((receiver = room_participant_by_nick(room, &ingress->proxy_to.resource)) != sender) {
 			// Participant wants to change a nickname
@@ -691,36 +707,32 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 				return;
 			}
 
-			if (ingress->type == 'u') {
-				// TODO(artem): always initiate room leaving procedure in this case (mimic ejabberd)
-				return;
+			if (ingress->type != 'u') {
+				// TODO(artem): check globally registered nickname
+
+				egress->from_nick = sender->nick;
+				egress->participant.affiliation = sender->affiliation;
+				egress->participant.role = sender->role;
+				buffer_ptr_cpy(&new_nick, &ingress->proxy_to.resource);
+				egress->participant.nick = new_nick;
+				egress->user_data = ingress->inner;
+				egress->type = 'u';
+				builder_push_status_code(&egress->participant, STATUS_NICKNAME_CHANGED);
+				router_cleanup(ingress);
+
+				room_broadcast_presence(room, egress, &chunk->send, sender);
+
+				free(sender->nick.data);
+				sender->nick = new_nick;
+				egress->type = 0;
+				egress->participant.nick.data =
+					egress->participant.nick.end = 0;
+			} else {
+				router_cleanup(ingress);
 			}
-
-			// TODO(artem): check globally registered nickname
-
-			egress->from_nick = sender->nick;
-			egress->participant.affiliation = sender->affiliation;
-			egress->participant.role = sender->role;
-			buffer_ptr_cpy(&new_nick, &ingress->proxy_to.resource);
-			egress->participant.nick = new_nick;
-			egress->user_data = ingress->inner;
-			egress->type = 'u';
-			builder_push_status_code(&egress->participant, STATUS_NICKNAME_CHANGED);
-			router_cleanup(ingress);
-
-			room_broadcast_presence(room, egress, &chunk->send, sender);
-
-			free(sender->nick.data);
-			sender->nick.data = new_nick.data;
-			sender->nick.size = BPT_SIZE(&new_nick);
-			egress->type = 0;
-			egress->participant.nick.data =
-				egress->participant.nick.end = 0;
 		} else {
 			router_cleanup(ingress);
 		}
-
-		// TODO(artem): check if visitors can change status
 	} else {
 		// Participant not in room, but wants to join
 		if (ingress->type == 'u') {
@@ -783,6 +795,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 			send_to_participants(chunk, receiver, 1);
 		}
 		sender = receiver;
+		receiver = 0;
 	}
 
 	// Broadcast sender's presence to all participants
@@ -792,10 +805,10 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	egress->user_data = ingress->inner;
 	room_broadcast_presence(room, egress, &chunk->send, sender);
 
-	if (receiver) {
+	if (!receiver) {
 		// This indicates that the user has just joined the room
 		// TODO(artem): parse maxchars and maxstanzas
-		room_history_send(room, chunk, room_history_first_item(room, -1, -1), receiver);
+		room_history_send(room, chunk, room_history_first_item(room, -1, -1), sender);
 	}
 
 	if (ingress->type == 'u') {
@@ -821,7 +834,7 @@ static int affiliation_by_name(BufferPtr *name) {
 			return affiliation;
 		}
 	}
-	return -1;
+	return AFFIL_UNCHANGED;
 }
 
 static int role_by_name(BufferPtr *name) {
@@ -833,24 +846,66 @@ static int role_by_name(BufferPtr *name) {
 		}
 	}
 
-	return -1;
+	return ROLE_UNCHANGED;
+}
+
+static int next_muc_admin_item(BufferPtr *node, ParticipantEntry *target) {
+	BufferPtr buffer;
+	Buffer node_name;
+	XmlAttr node_attr;
+
+	jid_init(&target->jid);
+	target->role = ROLE_UNCHANGED;
+	target->affiliation = AFFIL_UNCHANGED;
+	BPT_INIT(&target->nick);
+
+	buffer = *node;
+	for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
+			node->data = buffer.data) {
+		node->end = buffer.data;
+		xmlfsm_node_name(node, &node_name);
+
+		if (!BUF_EQ_LIT("item", &node_name)) {
+			continue;
+		}
+
+		while (xmlfsm_get_attr(node, &node_attr) == XMLPARSE_SUCCESS) {
+			if (BPT_EQ_LIT("affiliation", &node_attr.name)) {
+				target->affiliation = affiliation_by_name(&node_attr.value);
+				if (target->affiliation == AFFIL_UNCHANGED) {
+					return -1;
+				}
+			} else if (BPT_EQ_LIT("role", &node_attr.name)) {
+				target->role = role_by_name(&node_attr.value);
+				if (target->role == ROLE_UNCHANGED) {
+					return -1;
+				}
+			} else if (BPT_EQ_LIT("jid", &node_attr.name)) {
+				if (!jid_struct(&node_attr.value, &target->jid)) {
+					return -1;
+				}
+			} else if (BPT_EQ_LIT("nick", &node_attr.name)) {
+				target->nick = node_attr.value;
+			}
+		}
+
+		return TRUE;
+	}
+	return FALSE;
 }
 
 static void route_iq(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
-	ParticipantEntry *sender = 0, *receiver = 0;
+	ParticipantEntry *sender = 0, *receiver = 0, target;
 
-	BufferPtr buffer, node, nick, node_attr_value = BPT_INITIALIZER;
+	BufferPtr buffer, node, node_attr_value = BPT_INITIALIZER;
 	Buffer node_name;
 	XmlAttr node_attr;
-	int affiliation, role, attr_state;
-	Jid jid;
+	int attr_state, admin_state;
 
 	sender = room_participant_by_jid(room, &ingress->real_from);
 	if (!BPT_EMPTY(&ingress->proxy_to.resource)) {
-		LDEBUG("trying to use iq proxy to forward the stanza");
-
 		// iq directed to participant - just proxying
 		if (!sender) {
 			router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
@@ -881,7 +936,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			}
 		}
 
-		SEND(chunk);
+		SEND(&chunk->send);
 		return;
 	}
 
@@ -901,7 +956,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 		while ((attr_state = xmlfsm_get_attr(&node, &node_attr)) == XMLPARSE_SUCCESS) {
 			if (BPT_EQ_LIT("xmlns", &node_attr.name)) {
 				node_attr_value = node_attr.value;
-				// ...but read all attributes to the end
+				// found it, but must read all attributes to the end
 			}
 		}
 
@@ -941,45 +996,17 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 				return;
 			}
 
-			buffer = node;
-			BPT_INIT(&node_attr_value);
-			for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
-					node.data = buffer.data) {
-				node.end = buffer.data;
-				xmlfsm_node_name(&node, &node_name);
-
-				if (!BUF_EQ_LIT("item", &node_name)) {
-					continue;
-				}
-
-				while ((attr_state = xmlfsm_get_attr(&node, &node_attr)) == XMLPARSE_SUCCESS) {
-					if (BPT_EQ_LIT("affiliation", &node_attr.name)) {
-						node_attr_value = node_attr.value;
-						break;
-					}
-				}
-
-				if (!BPT_EMPTY(&node_attr_value)) {
-					break;
-				}
-			}
-
-			LDEBUG("got muc#admin 'get' for affiliation = '%.*s'",
-					BPT_SIZE(&node_attr_value), node_attr_value.data);
-
-			if (BPT_EMPTY(&node_attr_value)) {
+			if (next_muc_admin_item(&node, &target) <= 0 ||
+					target.affiliation == AFFIL_UNCHANGED) {
 				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
 				return;
 			}
+
+			LDEBUG("got muc#admin 'get' for affiliation = %d", target.affiliation);
 
 			egress->iq_type = BUILD_IQ_ROOM_AFFILIATIONS;
-			egress->muc_items.affiliation = affiliation_by_name(&node_attr_value);
-			if (egress->muc_items.affiliation < 0) {
-				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
-				return;
-			} else {
-				egress->muc_items.items = room->affiliations[egress->muc_items.affiliation];
-			}
+			egress->muc_items.affiliation = target.affiliation;
+			egress->muc_items.items = room->affiliations[egress->muc_items.affiliation];
 		}
 	} else if (ingress->type == 's') {
 		if (BPT_EQ_LIT("http://jabber.org/protocol/muc#admin", &node_attr_value)) {
@@ -998,58 +1025,39 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 				return;
 			}
 
-			buffer = node;
-			for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
-					node.data = buffer.data) {
-				node.end = buffer.data;
-				xmlfsm_node_name(&node, &node_name);
-
-				if (!BUF_EQ_LIT("item", &node_name)) {
-					continue;
-				}
-
-				role = affiliation = -1;
-				jid_init(&jid);
-				BPT_INIT(&nick);
-				while ((attr_state = xmlfsm_get_attr(&node, &node_attr)) == XMLPARSE_SUCCESS) {
-					if (BPT_EQ_LIT("affiliation", &node_attr.name)) {
-						affiliation = affiliation_by_name(&node_attr.value);
-						if (affiliation == -1) {
-							router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
-							return;
-						}
-					} else if (BPT_EQ_LIT("role", &node_attr.name)) {
-						role = role_by_name(&node_attr.value);
-						if (role == -1) {
-							router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
-							return;
-						}
-					} else if (BPT_EQ_LIT("jid", &node_attr.name)) {
-						if (!jid_struct(&node_attr.value, &jid)) {
-							router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
-							return;
-						}
-					} else if (BPT_EQ_LIT("nick", &node_attr.name)) {
-						nick = node_attr.value;
-					}
-				}
-
-				/*if (role == -1 && affiliation == -1 || jid_empty(&jid)) {
-					router_error(chink, &error_definitions[ERROR_IQ_BAD]);
-					return;
-				}
-
-				if (BPT_EMPTY(&jid)) {
-					receiver = room_participant_by_nick(&nick);
-				} else {
-					receiver = room_participant_by_jid(&jid);
-				}
-				if (!receiver) {
+			while ((admin_state = next_muc_admin_item(&node, &target))) {
+				if (admin_state < 0) {
 					router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
 					return;
-				}*/
+				}
+				if ((target.role != ROLE_UNCHANGED && BPT_BLANK(&target.nick)) ||
+						(target.affiliation != AFFIL_UNCHANGED && JID_EMPTY(&target.jid)) ||
+						((target.role == ROLE_UNCHANGED) == (target.affiliation == AFFIL_UNCHANGED))) {
+					router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+					return;
+				}
 
-				//if (affiliation >= 0 && jid
+				if (target.role != ROLE_UNCHANGED) {
+					receiver = room_participant_by_nick(room, &target.nick);
+					if (!receiver) {
+						router_error(chunk, &error_definitions[ERROR_RECIPIENT_NOT_IN_ROOM]);
+						return;
+					}
+					if (!muc_admin_action_allowed(sender, receiver, target.affiliation, target.role)) {
+						router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
+						return;
+					}
+					receiver->role = target.role;
+
+					egress->iq_type = BUILD_IQ_ROOM_AFFILIATIONS;
+					egress->muc_items.items = 0;
+				}
+
+				if (target.affiliation != AFFIL_UNCHANGED) {
+					// affects all occupants with that JID
+					// may change the role
+				}
+
 			}
 		}
 	}
@@ -1057,7 +1065,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 	if (egress->iq_type) {
 		jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
 		router_cleanup(ingress);
-		SEND(chunk);
+		SEND(&chunk->send);
 		jid_destroy(&egress->to);
 	}
 }

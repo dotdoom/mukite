@@ -24,7 +24,7 @@ BOOL jid_struct(BufferPtr *jid_string, Jid *jid_struct) {
 	char *part_start = jid_string->data,
 		*current = jid_string->data;
 
-	memset(jid_struct, 0, sizeof(*jid_struct));
+	jid_init(jid_struct);
 	for (; current < jid_string->end; ++current) {
 		if (part == JID_NODE && *current == '@') {
 			jid_struct->node.data = part_start;

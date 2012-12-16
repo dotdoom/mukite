@@ -108,13 +108,13 @@ BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
 	LDEBUG("building room items");
 	for (; participant; participant = participant->next) {
 		BUF_PUSH_LITERAL("<item name='");
-		BUF_PUSH_BUF(participant->nick);
+		BUF_PUSH_BPT(participant->nick);
 		BUF_PUSH_LITERAL("' jid='");
 		BUF_PUSH_BUF(room->node);
 		BUF_PUSH_LITERAL("@");
 		BUF_PUSH_BUF(*host);
 		BUF_PUSH_LITERAL("/");
-		BUF_PUSH_BUF(participant->nick);
+		BUF_PUSH_BPT(participant->nick);
 		BUF_PUSH_LITERAL("'/>");
 	}
 
@@ -253,7 +253,7 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 	BUF_PUSH_BUF(packet->from_host);
 	if (!BUF_NULL(&packet->from_nick)) {
 		BUF_PUSH_LITERAL("/");
-		BUF_PUSH_BUF(packet->from_nick);
+		BUF_PUSH_BPT(packet->from_nick);
 	}
 	BUF_PUSH_LITERAL("' to='");
 	BUF_PUSH(JID_STR(&packet->to), JID_LEN(&packet->to));

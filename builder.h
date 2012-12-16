@@ -30,7 +30,6 @@ typedef struct {
 #define BUILD_IQ_TIME 3
 #define BUILD_IQ_STATS 4
 
-
 #define BUILD_IQ_DISCO_INFO 11
 #define BUILD_IQ_DISCO_ITEMS 12
 
@@ -40,7 +39,8 @@ typedef struct {
 #define BUILD_IQ_ROOM_AFFILIATIONS 23
 
 typedef struct {
-	Buffer from_node, from_host, from_nick;
+	Buffer from_node, from_host;
+	BufferPtr from_nick;
 
 	Jid to;
 

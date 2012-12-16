@@ -47,7 +47,7 @@ typedef struct AffiliationEntry {
 
 typedef struct ParticipantEntry {
 	Jid jid;
-	Buffer nick;
+	BufferPtr nick;
 	int affiliation, role;
 	BufferPtr presence;
 	time_t last_message_time;
@@ -67,6 +67,7 @@ typedef struct ParticipantEntry {
 #define MUC_FLAG_IQ_PROXY (1 << 10)
 #define MUC_FLAG_INVITES (1 << 11)
 #define MUC_FLAG_VISITORSPM (1 << 12)
+#define MUC_FLAG_VISITORPRESENCE (1 << 13)
 
 #define MUC_FLAGS_DEFAULT (MUC_FLAG_ALLOWPM | \
 	MUC_FLAG_CHANGESUBJECT | \
