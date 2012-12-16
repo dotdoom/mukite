@@ -67,7 +67,7 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 }
 
 #define BUF_PUSH_STAT(category, value) \
-	BUF_PUSH_LITERAL("<stat name='" #category "/" #value "' unit='times' value='"); \
+	BUF_PUSH_LITERAL("<stat name='" #category "/" #value "' units='times' value='"); \
 	BUF_PUSH_FMT("%d", data->iq_stats.category->value); \
 	BUF_PUSH_LITERAL("'/>");
 
