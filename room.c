@@ -401,16 +401,23 @@ static BOOL room_add_affiliation(Room *room, int sender_affiliation, int affilia
 		} else {
 			room->affiliations[list] = affiliation_entry->next;
 		}
+		if (affiliation == AFFIL_NONE) {
+			free(affiliation_entry);
+		}
 	} else {
-		affiliation_entry = malloc(sizeof(*affiliation_entry));
+		if (affiliation != AFFIL_NONE) {
+			affiliation_entry = malloc(sizeof(*affiliation_entry));
+		}
 	}
 
-	jid_cpy(&affiliation_entry->jid, jid, JID_NODE | JID_HOST);
-	affiliation_entry->reason.data = malloc(4);
-	memcpy(affiliation_entry->reason.data, "test", 4);
-	affiliation_entry->reason.size = 4;
-	affiliation_entry->next = room->affiliations[affiliation];
-	room->affiliations[affiliation] = affiliation_entry;
+	if (affiliation != AFFIL_NONE) {
+		jid_cpy(&affiliation_entry->jid, jid, JID_NODE | JID_HOST);
+		affiliation_entry->reason.data = malloc(4);
+		memcpy(affiliation_entry->reason.data, "test", 4);
+		affiliation_entry->reason.size = 4;
+		affiliation_entry->next = room->affiliations[affiliation];
+		room->affiliations[affiliation] = affiliation_entry;
+	}
 
 	LDEBUG("set affiliation of '%.*s' to %d",
 			JID_LEN(jid), JID_STR(jid),
@@ -706,7 +713,6 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	BuilderPacket *egress = &chunk->egress;
 	ParticipantEntry *sender = 0, *receiver = 0;
 	int affiliation;
-	AffiliationEntry *affiliation_entry;
 	BufferPtr new_nick;
 
 	if (!erase_muc_user_node(ingress)) {
@@ -770,10 +776,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 
 		if (!room->participants && (room->flags & MUC_FLAG_PERSISTENTROOM) != MUC_FLAG_PERSISTENTROOM) {
 			// This is empty non-persistent room => thus it has just been created
-			affiliation_entry = malloc(sizeof(*affiliation_entry));
-			memset(affiliation_entry, 0, sizeof(*affiliation_entry));
-			jid_cpy(&affiliation_entry->jid, &ingress->real_from, JID_NODE | JID_HOST);
-			room->affiliations[AFFIL_OWNER] = affiliation_entry;
+			room_add_affiliation(room, AFFIL_OWNER, AFFIL_OWNER, &ingress->real_from);
 		}
 		if ((acl_role(chunk->acl, &ingress->real_from) & ACL_MUC_ADMIN) == ACL_MUC_ADMIN) {
 			affiliation = AFFIL_OWNER;
@@ -847,7 +850,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 static int affiliation_by_name(BufferPtr *name) {
 	int affiliation;
 
-	for (affiliation = AFFIL_OUTCAST; affiliation <= AFFIL_OWNER; ++affiliation) {
+	for (affiliation = AFFIL_NONE; affiliation <= AFFIL_OWNER; ++affiliation) {
 		if (BPT_EQ_BIN(affiliation_names[affiliation], name, affiliation_name_sizes[affiliation])) {
 			return affiliation;
 		}
@@ -1139,6 +1142,12 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			egress->type = 'u';
 		} else {
 			egress->type = '\0';
+		}
+
+		if (egress->type == 'u') {
+			BPT_INIT(&egress->user_data);
+		} else {
+			egress->user_data = current_affected_participant->presence;
 		}
 
 		room_broadcast_presence(room, egress, &chunk->send, current_affected_participant);
