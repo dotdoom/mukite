@@ -654,6 +654,8 @@ static void route_message(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
 	ParticipantEntry *sender = 0, *receiver = 0;
+	time_t now;
+	double now_diff;
 
 	if (!(sender = room_participant_by_jid(room, &ingress->real_from))) {
 		router_error(chunk, &error_definitions[ERROR_EXTERNAL_MESSAGE]);
@@ -682,7 +684,7 @@ static void route_message(Room *room, RouterChunk *chunk) {
 				JID_LEN(&receiver->jid), JID_STR(&receiver->jid));
 		router_cleanup(ingress);
 		send_to_participants(chunk, receiver, 1);
-	} else {
+	} else if (ingress->type == 'g') {
 		if (sender->role < ROLE_PARTICIPANT) {
 			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PUBLIC]);
 			return;
@@ -691,19 +693,15 @@ static void route_message(Room *room, RouterChunk *chunk) {
 		// TODO(artem): it is possible for the occupant to fabricate a <delay> in groupchat stanza;
 		// by the time of writing this, ejabberd does not cut off that node - neither do we
 
-		/*now = time(0);
-		now_diff = difftime(now, sender->last_message.time);
-		if (now_diff < 0.0001) {
+		now = time(0);
+		now_diff = difftime(now, sender->last_message_time);
+		if (now_diff < 0.2) { // FIXME(artem): this timer is inaccurate
 			router_error(chunk, &error_definitions[ERROR_TRAFFIC_RATE]);
 			return;
 		}
-		if (sender->last_message.size / now_diff > 5) {
-			router_error(chunk, &error_definitions[ERROR_TRAFFIC_RATE]);
-			return;
-		}*/
+		sender->last_message_time = now;
 
 		router_cleanup(ingress);
-		//sender->last_message_time = now;
 		history_push(room, chunk, sender);
 		send_to_participants(chunk, room->participants, 1 << 30);
 	}
