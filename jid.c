@@ -63,8 +63,8 @@ int jid_cmp(Jid *jid1, Jid *jid2, int mode) {
 	int size;
 
 	if ((mode & JID_NODE) && (jid1->node.data || !(mode & JID_CMP_NULLWC))) {
-		if (!jid1->node.data || !jid2->node.data) {
-			return jid1->node.data != jid2->node.data;
+		if (!jid1->node.data != !jid2->node.data) {
+			return 1;
 		}
 
 		if ((size = BPT_SIZE(&jid1->node)) != BPT_SIZE(&jid2->node)) {
@@ -87,8 +87,8 @@ int jid_cmp(Jid *jid1, Jid *jid2, int mode) {
 	}
 
 	if ((mode & JID_RESOURCE) && (jid1->resource.data || !(mode & JID_CMP_NULLWC))) {
-		if (!jid1->resource.data || !jid2->resource.data) {
-			return jid1->resource.data != jid2->resource.data;
+		if (!jid1->resource.data != !jid2->resource.data) {
+			return 1;
 		}
 
 		if ((size = BPT_SIZE(&jid1->resource)) != BPT_SIZE(&jid2->resource)) {

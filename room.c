@@ -273,6 +273,7 @@ ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid) {
 		// it is possible that <iq> (e.g. vCard) come with no resource.
 		// We should still be able to find that participant.
 		mode = JID_NODE | JID_HOST;
+		// FIXME(artem): when there are multiple joins from a single JID, this may fail
 	}
 
 	LDEBUG("finding rJID '%.*s' in room '%.*s', mode %d",
