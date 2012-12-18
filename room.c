@@ -1038,11 +1038,21 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 				return;
 			}
 
-			LDEBUG("got muc#admin 'get' for affiliation = %d", target.affiliation);
-
 			egress->iq_type = BUILD_IQ_ROOM_AFFILIATIONS;
 			egress->muc_items.affiliation = target.affiliation;
 			egress->muc_items.items = room->affiliations[egress->muc_items.affiliation];
+		} else if (BPT_EQ_LIT("http://jabber.org/protocol/muc#owner", &node_attr_value)) {
+			if  (!sender) {
+				router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
+				return;
+			}
+			if (sender->affiliation < AFFIL_OWNER) {
+				router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
+				return;
+			}
+
+			egress->iq_type = BUILD_IQ_ROOM_CONFIG;
+			egress->room = room;
 		}
 	} else if (ingress->type == 's') {
 		if (BPT_EQ_LIT("http://jabber.org/protocol/muc#admin", &node_attr_value)) {
@@ -1117,8 +1127,29 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 					}
 				}
 			}
+
 			egress->iq_type = BUILD_IQ_ROOM_AFFILIATIONS;
 			egress->muc_items.items = 0;
+		} else if (BPT_EQ_LIT("http://jabber.org/protocol/muc#owner", &node_attr_value)) {
+			if (attr_state == XMLNODE_EMPTY) {
+				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+				return;
+			}
+
+			if  (!sender) {
+				router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
+				return;
+			}
+			if (sender->affiliation < AFFIL_OWNER) {
+				router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
+				return;
+			}
+
+			if (xmlfsm_node_name(&node, &node_name) == XMLPARSE_SUCCESS) {
+				if (BUF_EQ_LIT("destroy", &node_name)) {
+					LWARN("THE ROOM IS DESTROYED");
+				}
+			}
 		}
 	}
 

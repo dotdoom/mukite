@@ -132,7 +132,9 @@ int xmlfsm_node_name(BufferPtr *buffer, Buffer *name) {
 		VALIDATE_END;
 	}
 
-	for (name->data = ++buffer->data; !WHITESPACE(*buffer->data) && *buffer->data != '>'; ++buffer->data) {
+	for (name->data = ++buffer->data;
+			!WHITESPACE(*buffer->data) && *buffer->data != '>' && *buffer->data != '/';
+			++buffer->data) {
 		VALIDATE_END;
 	}
 	name->size = buffer->data - name->data;

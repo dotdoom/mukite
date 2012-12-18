@@ -37,6 +37,7 @@ typedef struct {
 #define BUILD_IQ_ROOM_DISCO_INFO 21
 #define BUILD_IQ_ROOM_DISCO_ITEMS 22
 #define BUILD_IQ_ROOM_AFFILIATIONS 23
+#define BUILD_IQ_ROOM_CONFIG 24
 
 typedef struct {
 	Buffer from_node, from_host;
@@ -57,7 +58,7 @@ typedef struct {
 		// <presence>
 		MucAdmNode participant;
 
-		// iq_type = BUILD_IQ_ROOM_DISCO_*
+		// iq_type = BUILD_IQ_ROOM_DISCO_*, BUILD_IQ_ROOM_CONFIG
 		Room *room;
 		
 		// iq_type = BUILD_IQ_LAST
