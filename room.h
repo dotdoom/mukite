@@ -46,11 +46,16 @@ typedef struct AffiliationEntry {
 } AffiliationEntry;
 
 typedef struct ParticipantEntry {
-	Jid jid;
+	Jid jid, fake_jid;
 	BufferPtr nick;
 	int affiliation, role;
 	BufferPtr presence;
 	time_t last_message_time;
+
+	// This flag is used to avoid duplicated when building affected list
+	BOOL muc_admin_affected;
+	struct ParticipantEntry *muc_admin_next_affected;
+
 	struct ParticipantEntry *prev, *next;
 } ParticipantEntry;
 

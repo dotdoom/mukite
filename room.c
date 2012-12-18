@@ -163,21 +163,33 @@ int room_role_for_affiliation(Room *room, int affiliation) {
 	return room->default_role;
 }
 
-inline static AffiliationEntry *find_affiliation(AffiliationEntry *entry, Jid *jid) {
+inline static AffiliationEntry *find_affiliation(AffiliationEntry *entry, Jid *jid, int mode) {
 	for (; entry; entry = entry->next) {
-		if (!jid_cmp(&entry->jid, jid, JID_FULL | JID_CMP_NULLWC)) {
+		if (!jid_cmp(&entry->jid, jid, mode)) {
 			return entry;
 		}
 	}
 	return 0;
 }
 
-int room_get_affiliation(Room *room, Jid *jid) {
+static int room_get_affiliation(Room *room, ACLConfig *acl, Jid *jid) {
 	AffiliationEntry *entry = 0;
 	int affiliation;
 
+	if ((acl_role(acl, jid) & ACL_MUC_ADMIN) == ACL_MUC_ADMIN) {
+		return AFFIL_OWNER;
+	}
+
 	for (affiliation = AFFIL_OUTCAST; affiliation <= AFFIL_OWNER; ++affiliation) {
-		if ((entry = find_affiliation(room->affiliations[affiliation], jid))) {
+		if ((entry = find_affiliation(room->affiliations[affiliation], jid,
+						JID_NODE | JID_HOST))) {
+			return affiliation;
+		}
+	}
+
+	for (affiliation = AFFIL_OUTCAST; affiliation <= AFFIL_OWNER; ++affiliation) {
+		if ((entry = find_affiliation(room->affiliations[affiliation], jid,
+						JID_NODE | JID_HOST | JID_CMP_NULLWC))) {
 			return affiliation;
 		}
 	}
@@ -353,26 +365,58 @@ BOOL affiliations_deserialize(AffiliationEntry **list, FILE *input, int limit) {
 	return TRUE;
 }
 
-AffiliationEntry *affiliation_add(AffiliationEntry **list, Jid *jid, BufferPtr *reason) {
-	AffiliationEntry *affiliation = malloc(sizeof(*affiliation));
+static BOOL room_add_affiliation(Room *room, int sender_affiliation, int affiliation, Jid *jid) {
+	int list;
+	AffiliationEntry *affiliation_entry = 0,
+					 *previous_affiliation_entry = 0;
 
-	jid_cpy(&affiliation->jid, jid, JID_NODE | JID_HOST);
-
-	affiliation->reason.size = BPT_SIZE(reason);
-	affiliation->reason.data = malloc(affiliation->reason.size);
-	memcpy(affiliation->reason.data, reason->data, affiliation->reason.size);
-	affiliation->next = 0;
-
-	if (*list) {
-		(*list)->next = affiliation;
+	if (sender_affiliation != AFFIL_OWNER &&
+			affiliation >= AFFIL_ADMIN) {
+		return FALSE;
 	}
-	*list = affiliation;
 
-	LDEBUG("set affiliation of '%.*s' (reason '%.*s')",
+	for (list = AFFIL_OUTCAST; list <= AFFIL_OWNER; ++list) {
+		previous_affiliation_entry = 0;
+		for (affiliation_entry = room->affiliations[list]; affiliation_entry;
+				previous_affiliation_entry = affiliation_entry,
+				affiliation_entry = affiliation_entry->next) {
+			if (!jid_cmp(&affiliation_entry->jid, jid, JID_NODE | JID_HOST)) {
+				break;
+			}
+		}
+		if (affiliation_entry) {
+			break;
+		}
+	}
+
+	if (affiliation_entry) {
+		if (sender_affiliation != AFFIL_OWNER &&
+				list >= AFFIL_ADMIN) {
+			return FALSE;
+		}
+		jid_destroy(&affiliation_entry->jid);
+		free(affiliation_entry->reason.data);
+		if (previous_affiliation_entry) {
+			previous_affiliation_entry->next = affiliation_entry->next;
+		} else {
+			room->affiliations[list] = affiliation_entry->next;
+		}
+	} else {
+		affiliation_entry = malloc(sizeof(*affiliation_entry));
+	}
+
+	jid_cpy(&affiliation_entry->jid, jid, JID_NODE | JID_HOST);
+	affiliation_entry->reason.data = malloc(4);
+	memcpy(affiliation_entry->reason.data, "test", 4);
+	affiliation_entry->reason.size = 4;
+	affiliation_entry->next = room->affiliations[affiliation];
+	room->affiliations[affiliation] = affiliation_entry;
+
+	LDEBUG("set affiliation of '%.*s' to %d",
 			JID_LEN(jid), JID_STR(jid),
-			BPT_SIZE(reason), reason->data);
+			affiliation);
 
-	return affiliation;	
+	return TRUE;
 }
 
 BOOL room_serialize(Room *room, FILE *output) {
@@ -598,29 +642,6 @@ static void room_history_send(Room *room, RouterChunk *chunk, HistoryEntry *hist
 	}
 }
 
-static BOOL muc_admin_action_allowed(ParticipantEntry *source, ParticipantEntry *target,
-		int new_affiliation, int new_role) {
-	if (source->role != ROLE_MODERATOR) {
-		return FALSE;
-	}
-	if (source->affiliation == AFFIL_OWNER) {
-		// if changing affiliation to admin+, leave role untouched or promote to moderator
-		return new_affiliation == AFFIL_UNCHANGED ||
-			(new_affiliation >= AFFIL_ADMIN &&
-			 (new_role == ROLE_UNCHANGED || new_role == ROLE_MODERATOR));
-	}
-	if (source->affiliation == AFFIL_ADMIN) {
-		return target->affiliation < AFFIL_ADMIN &&
-				new_affiliation < AFFIL_ADMIN;
-	}
-	// moderator
-	return
-		target->affiliation < AFFIL_ADMIN &&
-		target->role < ROLE_MODERATOR &&
-		new_affiliation == AFFIL_UNCHANGED &&
-		new_role < ROLE_MODERATOR;
-}
-
 static void route_message(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
@@ -695,7 +716,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	if ((sender = room_participant_by_jid(room, &ingress->real_from))) {
 		if (sender->role == ROLE_VISITOR &&
 				(room->flags & MUC_FLAG_VISITORPRESENCE) != MUC_FLAG_VISITORPRESENCE) {
-			// Visitors not allowed to update presence
+			// Visitors are not allowed to update presence
 			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PRESENCE]);
 			return;
 		}
@@ -761,7 +782,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 				router_error(chunk, &error_definitions[ERROR_OCCUPANTS_LIMIT]);
 				return;
 			}
-			affiliation = room_get_affiliation(room, &ingress->real_from);
+			affiliation = room_get_affiliation(room, chunk->acl, &ingress->real_from);
 			if (affiliation == AFFIL_OUTCAST) {
 				// TODO(artem): show the reason of being banned?
 				router_error(chunk, &error_definitions[ERROR_BANNED]);
@@ -798,6 +819,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 
 	// Broadcast sender's presence to all participants
 	egress->user_data = ingress->inner;
+	// TODO(artem): set role = none if type = unavailable
 	room_broadcast_presence(room, egress, &chunk->send, sender);
 
 	if (!receiver) {
@@ -809,15 +831,16 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	if (ingress->type == 'u') {
 		room_leave(room, sender);
 	} else {
-		// Cache participant's presence to broadcast it to newcomers
-		// FIXME(artem): drop if exceeds the limit to avoid deserialization failures
-		if (sender->presence.data) {
-			sender->presence.data = realloc(sender->presence.data, BPT_SIZE(&ingress->inner));
-		} else {
-			sender->presence.data = malloc(BPT_SIZE(&ingress->inner));
+		if (BPT_SIZE(&ingress->inner) <= REASONABLE_RAW_LIMIT) {
+			// Cache participant's presence to broadcast it to newcomers
+			if (sender->presence.data) {
+				sender->presence.data = realloc(sender->presence.data, BPT_SIZE(&ingress->inner));
+			} else {
+				sender->presence.data = malloc(BPT_SIZE(&ingress->inner));
+			}
+			sender->presence.end = sender->presence.data + BPT_SIZE(&ingress->inner);
+			memcpy(sender->presence.data, ingress->inner.data, BPT_SIZE(&ingress->inner));
 		}
-		sender->presence.end = sender->presence.data + BPT_SIZE(&ingress->inner);
-		memcpy(sender->presence.data, ingress->inner.data, BPT_SIZE(&ingress->inner));
 	}
 }
 
@@ -889,10 +912,25 @@ static int next_muc_admin_item(BufferPtr *node, ParticipantEntry *target) {
 	return FALSE;
 }
 
+static void push_affected_participant(ParticipantEntry **first, ParticipantEntry **current, ParticipantEntry *new) {
+	if (!new->muc_admin_affected) {
+		new->muc_admin_affected = TRUE;
+		new->muc_admin_next_affected = 0;
+		if (*first) {
+			(*current)->muc_admin_next_affected = new;
+			*current = new;
+		} else {
+			*first = *current = new;
+		}
+	}
+}
+
 static void route_iq(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
-	ParticipantEntry *sender = 0, *receiver = 0, *affected_participant = 0, target;
+	ParticipantEntry *sender = 0, *receiver = 0, target,
+					 *first_affected_participant = 0,
+					 *current_affected_participant = 0;
 
 	BufferPtr buffer, node, node_attr_value = BPT_INITIALIZER;
 	Buffer node_name;
@@ -1038,23 +1076,46 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 						router_error(chunk, &error_definitions[ERROR_RECIPIENT_NOT_IN_ROOM]);
 						return;
 					}
-					if (!muc_admin_action_allowed(sender, receiver, target.affiliation, target.role)) {
+					if (receiver->affiliation >= AFFIL_ADMIN || // no one can change role of admin+
+							(sender->affiliation < AFFIL_ADMIN && // if just a moderator,
+							 (receiver->role >= ROLE_MODERATOR || // may only change roles of non-moderators
+							  target.role >= ROLE_MODERATOR))) { // to non-moderators
 						router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
 						return;
 					}
 					receiver->role = target.role;
 
-					egress->iq_type = BUILD_IQ_ROOM_AFFILIATIONS;
-					egress->muc_items.items = 0;
-					affected_participant = receiver;
+					push_affected_participant(&first_affected_participant,
+							&current_affected_participant, receiver);
 				}
 
 				if (target.affiliation != AFFIL_UNCHANGED) {
-					// affects all occupants with that JID
-					// may change the role
-				}
+					if (sender->affiliation < AFFIL_ADMIN) {
+						router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
+						return;
+					}
 
+					if (!room_add_affiliation(room, sender->affiliation, target.affiliation, &target.jid)) {
+						router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
+						return;
+					}
+
+					for (receiver = room->participants; receiver; receiver = receiver->next) {
+						target.affiliation = room_get_affiliation(room, chunk->acl, &receiver->jid);
+						if (target.affiliation != receiver->affiliation) {
+							receiver->role =
+								(target.affiliation >= AFFIL_ADMIN) ? ROLE_MODERATOR :
+								(target.affiliation == AFFIL_OUTCAST) ? ROLE_NONE :
+								ROLE_PARTICIPANT;
+							receiver->affiliation = target.affiliation;
+							push_affected_participant(&first_affected_participant,
+									&current_affected_participant, receiver);
+						}
+					}
+				}
 			}
+			egress->iq_type = BUILD_IQ_ROOM_AFFILIATIONS;
+			egress->muc_items.items = 0;
 		}
 	}
 
@@ -1065,16 +1126,24 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 		jid_destroy(&egress->to);
 	}
 
-	if (affected_participant) {
-		if (affected_participant->role == ROLE_NONE) {
+	for (current_affected_participant = first_affected_participant;
+			current_affected_participant;
+			current_affected_participant = current_affected_participant->muc_admin_next_affected) {
+		current_affected_participant->muc_admin_affected = FALSE;
+		egress->participant.status_codes_count = 0;
+		if (current_affected_participant->affiliation == AFFIL_OUTCAST) {
+			builder_push_status_code(&egress->participant, STATUS_BANNED);
+			egress->type = 'u';
+		} else if (current_affected_participant->role == ROLE_NONE) {
 			builder_push_status_code(&egress->participant, STATUS_KICKED);
 			egress->type = 'u';
 		} else {
 			egress->type = '\0';
 		}
-		room_broadcast_presence(room, egress, &chunk->send, affected_participant);
-		if (affected_participant->role == ROLE_NONE) {
-			room_leave(room, affected_participant);
+
+		room_broadcast_presence(room, egress, &chunk->send, current_affected_participant);
+		if (current_affected_participant->role == ROLE_NONE) {
+			room_leave(room, current_affected_participant);
 		}
 	}
 }

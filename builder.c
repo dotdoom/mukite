@@ -66,27 +66,27 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 	return TRUE;
 }
 
-#define BUF_PUSH_STAT(category, value) \
-	BUF_PUSH_LITERAL("<stat name='" #category "/" #value "' units='times' value='"); \
+#define BUF_PUSH_STAT(category, value, units) \
+	BUF_PUSH_LITERAL("<stat name='" #category "/" #value "' units='" units "' value='"); \
 	BUF_PUSH_FMT("%d", data->iq_stats.category->value); \
 	BUF_PUSH_LITERAL("'/>");
 
 BOOL build_stats(BuilderBuffer *buffer, BuilderPacket *data) {
 	int chunk_size;
 
-	BUF_PUSH_STAT(rooms, count);
-	BUF_PUSH_STAT(queue, overflows);
-	BUF_PUSH_STAT(queue, underflows);
-	BUF_PUSH_STAT(queue, realloc_enlarges);
-	BUF_PUSH_STAT(queue, realloc_shortens);
-	BUF_PUSH_STAT(queue, mallocs);
-	BUF_PUSH_STAT(queue, data_pushes);
-	BUF_PUSH_STAT(queue, data_pops);
-	BUF_PUSH_STAT(queue, free_pushes);
-	BUF_PUSH_STAT(queue, free_pops);
-	BUF_PUSH_STAT(ringbuffer, underflows);
-	BUF_PUSH_STAT(ringbuffer, overflows);
-	BUF_PUSH_STAT(ringbuffer, reads);
+	BUF_PUSH_STAT(rooms, count, "items");
+	BUF_PUSH_STAT(queue, overflows, "times");
+	BUF_PUSH_STAT(queue, underflows, "times");
+	BUF_PUSH_STAT(queue, realloc_enlarges, "times");
+	BUF_PUSH_STAT(queue, realloc_shortens, "times");
+	BUF_PUSH_STAT(queue, mallocs, "times");
+	BUF_PUSH_STAT(queue, data_pushes, "times");
+	BUF_PUSH_STAT(queue, data_pops, "times");
+	BUF_PUSH_STAT(queue, free_pushes, "times");
+	BUF_PUSH_STAT(queue, free_pops, "times");
+	BUF_PUSH_STAT(ringbuffer, underflows, "times");
+	BUF_PUSH_STAT(ringbuffer, overflows, "times");
+	BUF_PUSH_STAT(ringbuffer, reads, "times");
 
 	/*
 
