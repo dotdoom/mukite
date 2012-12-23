@@ -405,7 +405,7 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 			break;
 	}
 
-	BUF_PUSH_BPT(packet->header);
+	BUF_PUSH_IFBPT(packet->header);
 	BUF_PUSH_LITERAL(" from='");
 	if (!BUF_NULL(&packet->from_node)) {
 		BUF_PUSH_BUF(packet->from_node);

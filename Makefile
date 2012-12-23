@@ -21,7 +21,7 @@ OBJECTS=$(SOURCES:.c=.o)
 all: $(EXECUTABLE)
 
 run: $(EXECUTABLE)
-	./$(EXECUTABLE) config
+	./$(EXECUTABLE) config.example
 
 $(EXECUTABLE): $(OBJECTS) $(XMCOMP)
 

@@ -90,7 +90,6 @@ typedef struct Room {
 	Buffer node,
 		title,
 		description,
-		subject,
 		password;
 
 	int flags;
@@ -108,6 +107,10 @@ typedef struct Room {
 		HistoryEntry *first, *last;
 		int size, max_size;
 	} history;
+
+	struct {
+		BufferPtr data, nick;
+	} subject;
 
 	struct Room *prev, *next;
 	pthread_mutex_t sync;

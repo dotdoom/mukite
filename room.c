@@ -186,7 +186,8 @@ void room_destroy(Room *room) {
 	free(room->node.data);
 	free(room->title.data);
 	free(room->description.data);
-	free(room->subject.data);
+	free(room->subject.data.data);
+	free(room->subject.nick.data);
 	free(room->password.data);
 	for (i = AFFIL_OUTCAST; i <= AFFIL_OWNER; ++i) {
 		while (room->affiliations[i]) {
@@ -480,8 +481,10 @@ BOOL room_serialize(Room *room, FILE *output) {
 		buffer_serialize(&room->node, output) &&
 		buffer_serialize(&room->title, output) &&
 		buffer_serialize(&room->description, output) &&
-		buffer_serialize(&room->subject, output) &&
 		buffer_serialize(&room->password, output) &&
+
+		buffer_ptr_serialize(&room->subject.data, output) &&
+		buffer_ptr_serialize(&room->subject.nick, output) &&
 
 		SERIALIZE_BASE(room->flags) &&
 		SERIALIZE_BASE(room->default_role) &&
@@ -504,8 +507,10 @@ BOOL room_deserialize(Room *room, FILE *input) {
 		buffer_deserialize(&room->node, input, MAX_JID_PART_SIZE) &&
 		buffer_deserialize(&room->title, input, USER_STRING_OPTION_LIMIT) &&
 		buffer_deserialize(&room->description, input, USER_STRING_OPTION_LIMIT) &&
-		buffer_deserialize(&room->subject, input, USER_STRING_OPTION_LIMIT) &&
 		buffer_deserialize(&room->password, input, USER_STRING_OPTION_LIMIT) &&
+
+		buffer_ptr_deserialize(&room->subject.data, input, USER_STRING_OPTION_LIMIT) &&
+		buffer_ptr_deserialize(&room->subject.nick, input, USER_STRING_OPTION_LIMIT) &&
 
 		DESERIALIZE_BASE(room->flags) &&
 		DESERIALIZE_BASE(room->default_role) &&
@@ -560,6 +565,27 @@ BOOL erase_muc_user_node(IncomingPacket *packet) {
 	}
 
 	return TRUE;
+}
+
+static BOOL get_subject_node(BufferPtr *packet, BufferPtr *subject) {
+	BufferPtr buffer = *packet;
+	Buffer node_name;
+	char *node_start;
+
+	for (subject->data = buffer.data;
+			xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS; subject->data = buffer.data) {
+		node_start = subject->data;
+		subject->end = buffer.data;
+		LDEBUG("SEARCHING FOR SUBJECT: '%.*s'", BPT_SIZE(subject), subject->data);
+
+		xmlfsm_node_name(subject, &node_name);
+		if (BUF_EQ_LIT("subject", &node_name)) {
+			subject->data = node_start;
+			LDEBUG("SUBJECT FOUND: '%.*s'", BPT_SIZE(subject), subject->data);
+			return TRUE;
+		}
+	}
+	return FALSE;
 }
 
 void send_to_participants(RouterChunk *chunk, ParticipantEntry *participant, int limit) {
@@ -669,9 +695,7 @@ static HistoryEntry *room_history_first_item(Room *room, int maxchars, int maxst
 
 static void room_history_send(Room *room, RouterChunk *chunk, HistoryEntry *history,
 		ParticipantEntry *receiver) {
-	BuilderPacket *egress;
-	
-	egress = &chunk->egress;
+	BuilderPacket *egress = &chunk->egress;
 
 	egress->name = 'm';
 	egress->type = 'g';
@@ -683,6 +707,21 @@ static void room_history_send(Room *room, RouterChunk *chunk, HistoryEntry *hist
 		egress->user_data = history->inner;
 		egress->delay = history->delay;
 		SEND(&chunk->send);
+		egress->delay = 0;
+	}
+}
+
+static void room_subject_send(Room *room, RouterChunk *chunk, ParticipantEntry *receiver) {
+	BuilderPacket *egress = &chunk->egress;
+
+	if (!BPT_NULL(&room->subject.data)) {
+		egress->name = 'm';
+		egress->type = 'g';
+		egress->to = receiver->jid;
+		egress->from_nick = room->subject.nick;
+		BPT_INIT(&egress->header);
+		egress->user_data = room->subject.data;
+		SEND(&chunk->send);
 	}
 }
 
@@ -690,6 +729,7 @@ static void route_message(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
 	ParticipantEntry *sender = 0, *receiver = 0;
+	BufferPtr new_subject;
 
 	if (!(sender = room_participant_by_jid(room, &ingress->real_from))) {
 		router_error(chunk, &error_definitions[ERROR_EXTERNAL_MESSAGE]);
@@ -733,6 +773,27 @@ static void route_message(Room *room, RouterChunk *chunk) {
 			return;
 		}
 		sender->last_message_time = chunk->config->timer_thread.ticks;
+
+		if (get_subject_node(&ingress->inner, &new_subject)) {
+			if (sender->role < ROLE_MODERATOR &&
+					!(room->flags & MUC_FLAG_CHANGESUBJECT)) {
+				router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
+				return;
+			}
+			if (BPT_SIZE(&new_subject) > USER_STRING_OPTION_LIMIT) {
+				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
+				return;
+			}
+			free(room->subject.data.data);
+			free(room->subject.nick.data);
+			if (BPT_NULL(&new_subject)) {
+				BPT_INIT(&room->subject.nick);
+				BPT_INIT(&room->subject.data);
+			} else {
+				buffer_ptr_cpy(&room->subject.nick, &sender->nick);
+				buffer_ptr_cpy(&room->subject.data, &new_subject);
+			}
+		}
 
 		router_cleanup(ingress);
 		room_history_push(room, chunk, sender);
@@ -860,6 +921,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 		// This indicates that the user has just joined the room
 		// TODO(artem): parse maxchars and maxstanzas
 		room_history_send(room, chunk, room_history_first_item(room, -1, -1), sender);
+		room_subject_send(room, chunk, sender);
 	}
 
 	if (ingress->type == 'u') {
