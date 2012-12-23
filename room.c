@@ -7,25 +7,20 @@
 
 #include "room.h"
 
-// "magic" with &xxx[1] is because 'none' equals -1.
-// That's because only 4 last affiliations are stored,
-// and it helps to keep affiliations in the Room struct properly
-static const char* _affiliation_names[] = {
-	"none",
+const char* affiliation_names[] = {
 	"outcast",
+	"none",
 	"member",
 	"admin",
 	"owner"
 };
-const char** affiliation_names = &_affiliation_names[1];
-static const int _affiliation_name_sizes[] = {
-	4,
+const int affiliation_name_sizes[] = {
 	7,
+	4,
 	6,
 	5,
 	5
 };
-const int* affiliation_name_sizes = &_affiliation_name_sizes[1];
 
 const char* role_names[] = {
 	"none",
@@ -44,6 +39,7 @@ const int role_name_sizes[] = {
 #define STATUS_NON_ANONYMOUS 100
 #define STATUS_SELF_PRESENCE 110
 #define STATUS_LOGGING_ENABLED 170
+#define STATUS_ROOM_CREATED 201
 #define STATUS_NICKNAME_ENFORCED 210
 #define STATUS_BANNED 301
 #define STATUS_NICKNAME_CHANGED 303
@@ -147,17 +143,46 @@ void room_init(Room *room, BufferPtr *node) {
 	room->node.data = malloc(room->node.size);
 	memcpy(room->node.data, node->data, room->node.size);
 	room->flags = MUC_FLAGS_DEFAULT;
-	room->max_participants = 100;
-	room->max_history_size = 20;
+	room->participants.max_size = 100;
+	room->history.max_size = 20;
 	room->default_role = ROLE_PARTICIPANT;
 }
 
+void room_history_shift(Room *room) {
+	HistoryEntry *removee = 0;
+	if (room->history.first) {
+		removee = room->history.first;
+		if (removee->next) {
+			removee->next->prev = 0;
+		} else {
+			room->history.last = 0;
+		}
+		room->history.first = removee->next;
+
+		free(removee->nick.data);
+		free(removee->header.data);
+		free(removee->inner.data);
+		free(removee);
+		--room->history.size;
+	}
+}
+
+static AffiliationEntry *room_affiliation_detach_clear(AffiliationEntry **list,
+		AffiliationEntry *affiliation, AffiliationEntry *prev) {
+	if (prev) {
+		prev->next = affiliation->next;
+	} else {
+		*list = affiliation->next;
+	}
+	jid_destroy(&affiliation->jid);
+	free(affiliation->reason.data);
+	return affiliation;
+}
+
 void room_destroy(Room *room) {
-	AffiliationEntry *t_affiliation;
-	HistoryEntry *t_history;
 	int i;
 
-	LASSERT(!room->participants, "Attempt to destroy a non-empty room!");
+	LASSERT(!room->participants.size, "Attempt to destroy a non-empty room!");
 	free(room->node.data);
 	free(room->title.data);
 	free(room->description.data);
@@ -165,20 +190,11 @@ void room_destroy(Room *room) {
 	free(room->password.data);
 	for (i = AFFIL_OUTCAST; i <= AFFIL_OWNER; ++i) {
 		while (room->affiliations[i]) {
-			t_affiliation = room->affiliations[i];
-			room->affiliations[i] = room->affiliations[i]->next;
-			jid_destroy(&t_affiliation->jid);
-			free(t_affiliation->reason.data);
-			free(t_affiliation);
+			free(room_affiliation_detach_clear(&room->affiliations[i], room->affiliations[i], 0));
 		}
 	}
-	while (room->history) {
-		t_history = room->history;
-		room->history = room->history->next;
-		free(t_history->nick.data);
-		free(t_history->header.data);
-		free(t_history->inner.data);
-		free(t_history);
+	while (room->history.size) {
+		room_history_shift(room);
 	}
 	pthread_mutex_destroy(&room->sync);
 }
@@ -207,7 +223,7 @@ static int room_get_affiliation(Room *room, ACLConfig *acl, Jid *jid) {
 	AffiliationEntry *entry = 0;
 	int affiliation;
 
-	if ((acl_role(acl, jid) & ACL_MUC_ADMIN) == ACL_MUC_ADMIN) {
+	if (acl_role(acl, jid) & ACL_MUC_ADMIN) {
 		return AFFIL_OWNER;
 	}
 
@@ -242,27 +258,27 @@ ParticipantEntry *room_join(Room *room, Jid *jid, BufferPtr *nick, int affiliati
 
 	buffer_ptr_cpy(&participant->nick, nick);
 
-	if (room->participants) {
-		room->participants->prev = participant;
+	if (room->participants.first) {
+		room->participants.first->prev = participant;
 	}
-	participant->next = room->participants;
+	participant->next = room->participants.first;
 	participant->prev = 0;
-	room->participants = participant;
+	room->participants.first = participant;
 
-	++room->participants_count;
+	++room->participants.size;
 
 	participant->affiliation = affiliation;
 	participant->role = room_role_for_affiliation(room, affiliation);
 
 	LDEBUG("created new participant #%d, role %d affil %d",
-			room->participants_count, participant->role, participant->affiliation);
+			room->participants.size, participant->role, participant->affiliation);
 
 	return participant;
 }
 
 void room_leave(Room *room, ParticipantEntry *participant) {
-	if (room->participants == participant) {
-		room->participants = participant->next;
+	if (room->participants.first == participant) {
+		room->participants.first = participant->next;
 	} else {
 		participant->prev->next = participant->next;
 	}
@@ -271,26 +287,24 @@ void room_leave(Room *room, ParticipantEntry *participant) {
 	}
 
 	LDEBUG("participant #%d '%.*s' (JID '%.*s') has left '%.*s'",
-			room->participants_count, BPT_SIZE(&participant->nick), participant->nick.data,
+			room->participants.size, BPT_SIZE(&participant->nick), participant->nick.data,
 			JID_LEN(&participant->jid), JID_STR(&participant->jid),
 			room->node.size, room->node.data);
-	--room->participants_count;
+	--room->participants.size;
 
 	jid_destroy(&participant->jid);
-	if (participant->presence.data) {
-		free(participant->presence.data);
-	}
+	free(participant->presence.data);
 	free(participant->nick.data);
 
-	if ((room->flags & MUC_FLAG_PERSISTENTROOM) != MUC_FLAG_PERSISTENTROOM &&
-			!room->participants) {
+	if (!(room->flags & MUC_FLAG_PERSISTENTROOM) &&
+			!room->participants.size) {
 		room->flags |= MUC_FLAG_DESTROYED;
 	}
 }
 
 ParticipantEntry *room_participant_by_nick(Room *room, BufferPtr *nick) {
 	int size = BPT_SIZE(nick);
-	ParticipantEntry *current = room->participants;
+	ParticipantEntry *current = room->participants.first;
 	for (; current; current = current->next) {
 		if (BPT_SIZE(&current->nick) == size &&
 				!memcmp(current->nick.data, nick->data, size)) {
@@ -302,7 +316,7 @@ ParticipantEntry *room_participant_by_nick(Room *room, BufferPtr *nick) {
 }
 
 ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid) {
-	ParticipantEntry *current = room->participants;
+	ParticipantEntry *current = room->participants.first;
 	int mode = JID_FULL;
 
 	if (BPT_EMPTY(&jid->resource)) {
@@ -337,10 +351,10 @@ BOOL participants_serialize(ParticipantEntry *list, FILE *output) {
 	return TRUE;
 }
 
-BOOL participants_deserialize(Room *room, FILE *input, int limit) {
+BOOL participants_deserialize(struct ParticipantsList *participants, FILE *input, int limit) {
 	int entry_count = 0;
 	ParticipantEntry *new_entry = 0;
-	ParticipantEntry **list = &room->participants;
+	ParticipantEntry **list = &participants->first;
 	LDEBUG("deserializing participant list");
 	DESERIALIZE_LIST(
 		jid_deserialize(&new_entry->jid, input) &&
@@ -351,7 +365,7 @@ BOOL participants_deserialize(Room *room, FILE *input, int limit) {
 
 		new_entry->next->prev = new_entry
 	);
-	room->participants_count = entry_count;
+	participants->size = entry_count;
 	return TRUE;
 }
 
@@ -366,9 +380,9 @@ BOOL history_serialize(HistoryEntry *list, FILE *output) {
 	return TRUE;
 }
 
-BOOL history_deserialize(Room *room, FILE *input, int limit) {
+BOOL history_deserialize(struct HistoryList *history, FILE *input, int limit) {
 	int entry_count = 0;
-	HistoryEntry **list = &room->history, *new_entry = 0;
+	HistoryEntry **list = &history->first, *new_entry = 0;
 	LDEBUG("deserializing room history");
 	DESERIALIZE_LIST(
 		buffer_ptr_deserialize(&new_entry->nick, input, MAX_JID_PART_SIZE) &&
@@ -378,8 +392,8 @@ BOOL history_deserialize(Room *room, FILE *input, int limit) {
 
 		new_entry->next->prev = new_entry
 	);
-	room->history_last = new_entry;
-	room->history_entries_count = entry_count;
+	history->last = new_entry;
+	history->size = entry_count;
 	return TRUE;
 }
 
@@ -432,23 +446,19 @@ static BOOL room_affiliation_add(Room *room, int sender_affiliation, int affilia
 				list >= AFFIL_ADMIN) {
 			return FALSE;
 		}
-		jid_destroy(&affiliation_entry->jid);
-		free(affiliation_entry->reason.data);
-		if (previous_affiliation_entry) {
-			previous_affiliation_entry->next = affiliation_entry->next;
-		} else {
-			room->affiliations[list] = affiliation_entry->next;
-		}
+		room_affiliation_detach_clear(&room->affiliations[list],
+				affiliation_entry,
+				previous_affiliation_entry);
+
 		if (affiliation == AFFIL_NONE) {
 			free(affiliation_entry);
-		}
-	} else {
-		if (affiliation != AFFIL_NONE) {
-			affiliation_entry = malloc(sizeof(*affiliation_entry));
 		}
 	}
 
 	if (affiliation != AFFIL_NONE) {
+		if (!affiliation_entry) {
+			affiliation_entry = malloc(sizeof(*affiliation_entry));
+		}
 		jid_cpy(&affiliation_entry->jid, jid, JID_NODE | JID_HOST);
 		affiliation_entry->reason.data = malloc(4);
 		memcpy(affiliation_entry->reason.data, "test", 4);
@@ -475,13 +485,13 @@ BOOL room_serialize(Room *room, FILE *output) {
 
 		SERIALIZE_BASE(room->flags) &&
 		SERIALIZE_BASE(room->default_role) &&
-		SERIALIZE_BASE(room->max_participants) &&
-		SERIALIZE_BASE(room->max_history_size) &&
+		SERIALIZE_BASE(room->participants.max_size) &&
+		SERIALIZE_BASE(room->history.max_size) &&
 		SERIALIZE_BASE(room->_unused) &&
 
-		history_serialize(room->history, output) &&
+		history_serialize(room->history.first, output) &&
 
-		participants_serialize(room->participants, output) &&
+		participants_serialize(room->participants.first, output) &&
 		affiliations_serialize(room->affiliations[AFFIL_OWNER], output) &&
 		affiliations_serialize(room->affiliations[AFFIL_ADMIN], output) &&
 		affiliations_serialize(room->affiliations[AFFIL_MEMBER], output) &&
@@ -499,13 +509,13 @@ BOOL room_deserialize(Room *room, FILE *input) {
 
 		DESERIALIZE_BASE(room->flags) &&
 		DESERIALIZE_BASE(room->default_role) &&
-		DESERIALIZE_BASE(room->max_participants) &&
-		DESERIALIZE_BASE(room->max_history_size) &&
+		DESERIALIZE_BASE(room->participants.max_size) &&
+		DESERIALIZE_BASE(room->history.max_size) &&
 		DESERIALIZE_BASE(room->_unused) &&
 
-		history_deserialize(room, input, HISTORY_ITEMS_COUNT_LIMIT) &&
+		history_deserialize(&room->history, input, HISTORY_ITEMS_COUNT_LIMIT) &&
 
-		participants_deserialize(room, input, PARTICIPANTS_LIMIT) &&
+		participants_deserialize(&room->participants, input, PARTICIPANTS_LIMIT) &&
 		affiliations_deserialize(&room->affiliations[AFFIL_OWNER], input, AFFILIATION_LIST_LIMIT) &&
 		affiliations_deserialize(&room->affiliations[AFFIL_ADMIN], input, AFFILIATION_LIST_LIMIT) &&
 		affiliations_deserialize(&room->affiliations[AFFIL_MEMBER], input, AFFILIATION_LIST_LIMIT) &&
@@ -564,13 +574,13 @@ void send_to_participants(RouterChunk *chunk, ParticipantEntry *participant, int
 }
 
 BOOL room_attach_config_status_codes(Room *room, MucAdmNode *participant) {
-	if ((room->flags & MUC_FLAG_SEMIANONYMOUS) != MUC_FLAG_SEMIANONYMOUS) {
+	if (!(room->flags & MUC_FLAG_SEMIANONYMOUS)) {
 		if (!builder_push_status_code(participant, STATUS_NON_ANONYMOUS)) {
 			return FALSE;
 		}
 	}
 
-	if ((room->flags & MUC_FLAG_ENABLELOGGING) == MUC_FLAG_ENABLELOGGING) {
+	if (room->flags & MUC_FLAG_ENABLELOGGING) {
 		if (!builder_push_status_code(participant, STATUS_LOGGING_ENABLED)) {
 			return FALSE;
 		}
@@ -581,7 +591,7 @@ BOOL room_attach_config_status_codes(Room *room, MucAdmNode *participant) {
 
 BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallback *send, ParticipantEntry *sender) {
 	int orig_status_codes_count = egress->participant.status_codes_count;
-	ParticipantEntry *receiver = room->participants;
+	ParticipantEntry *receiver = room->participants.first;
 
 	egress->name = 'p';
 	egress->from_nick = sender->nick;
@@ -599,8 +609,7 @@ BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallback *se
 			egress->participant.status_codes_count = orig_status_codes_count;
 		}
 		egress->to = receiver->jid;
-		if (receiver->role == ROLE_MODERATOR ||
-				(room->flags & MUC_FLAG_SEMIANONYMOUS) != MUC_FLAG_SEMIANONYMOUS) {
+		if (receiver->role == ROLE_MODERATOR || !(room->flags & MUC_FLAG_SEMIANONYMOUS)) {
 			egress->participant.jid = &sender->jid;
 		} else {
 			egress->participant.jid = 0;
@@ -611,8 +620,14 @@ BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallback *se
 }
 
 void room_history_push(Room *room, RouterChunk *chunk, ParticipantEntry *sender) {
-	HistoryEntry *next = 0, *new_item = 0;
-	if (room->max_history_size <= 0) {
+	HistoryEntry *new_item = 0;
+
+	while (room->history.size &&
+			room->history.size >= room->history.max_size) {
+		room_history_shift(room);
+	}
+
+	if (room->history.max_size <= 0) {
 		return;
 	}
 
@@ -624,28 +639,14 @@ void room_history_push(Room *room, RouterChunk *chunk, ParticipantEntry *sender)
 	new_item->delay = chunk->config->timer_thread.start +
 		chunk->config->timer_thread.ticks / TIMER_RESOLUTION;
 
-	if (room->history) {
-		while (room->history_entries_count >= room->max_history_size) {
-			next = room->history->next;
-			if (next) {
-				next->prev = 0;
-			} else {
-				room->history_last = 0;
-			}
-			free(room->history);
-			room->history = next;
-			--room->history_entries_count;
-		}
-
-		if (room->history_last) {
-			room->history_last->next = new_item;
-		}
-		new_item->prev = room->history_last;
-		room->history_last = new_item;
-		++room->history_entries_count;
+	if (room->history.first) {
+		room->history.last->next = new_item;
+		new_item->prev = room->history.last;
+		room->history.last = new_item;
+		++room->history.size;
 	} else {
-		room->history = room->history_last = new_item;
-		room->history_entries_count = 1;
+		room->history.first = room->history.last = new_item;
+		room->history.size = 1;
 	}
 }
 
@@ -653,9 +654,9 @@ static HistoryEntry *room_history_first_item(Room *room, int maxchars, int maxst
 	HistoryEntry *first_item = 0;
 	if (maxchars < 0 && maxstanzas < 0) {
 		// shortcut
-		return room->history;
+		return room->history.first;
 	}
-	for (first_item = room->history_last; first_item; first_item = first_item->prev) {
+	for (first_item = room->history.last; first_item; first_item = first_item->prev) {
 		if (maxchars >= 0 && (maxchars -= BPT_SIZE(&first_item->inner)) < 0) {
 			return first_item->next;
 		}
@@ -663,7 +664,7 @@ static HistoryEntry *room_history_first_item(Room *room, int maxchars, int maxst
 			return first_item->next;
 		}
 	}
-	return room->history;
+	return room->history.first;
 }
 
 static void room_history_send(Room *room, RouterChunk *chunk, HistoryEntry *history,
@@ -707,7 +708,7 @@ static void route_message(Room *room, RouterChunk *chunk) {
 			return;
 		}
 
-		if (sender->role == ROLE_VISITOR && (room->flags & MUC_FLAG_VISITORSPM) == MUC_FLAG_VISITORSPM) {
+		if (sender->role == ROLE_VISITOR && room->flags & MUC_FLAG_VISITORSPM) {
 			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PM]);
 			return;
 		}
@@ -735,7 +736,7 @@ static void route_message(Room *room, RouterChunk *chunk) {
 
 		router_cleanup(ingress);
 		room_history_push(room, chunk, sender);
-		send_to_participants(chunk, room->participants, 1 << 30);
+		send_to_participants(chunk, room->participants.first, 1 << 30);
 	}
 }
 
@@ -752,7 +753,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 
 	if ((sender = room_participant_by_jid(room, &ingress->real_from))) {
 		if (sender->role == ROLE_VISITOR &&
-				(room->flags & MUC_FLAG_VISITORPRESENCE) != MUC_FLAG_VISITORPRESENCE) {
+				!(room->flags & MUC_FLAG_VISITORPRESENCE)) {
 			// Visitors are not allowed to update presence
 			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PRESENCE]);
 			return;
@@ -805,14 +806,15 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 		// TODO(artem): check password
 		// TODO(artem): load room history as requested
 
-		if ((room->flags & MUC_FLAG_JUST_CREATED) == MUC_FLAG_JUST_CREATED) {
+		if (room->flags & MUC_FLAG_JUST_CREATED) {
 			room_affiliation_add(room, AFFIL_OWNER, AFFIL_OWNER, &ingress->real_from);
 			room->flags &= ~MUC_FLAG_JUST_CREATED;
+			builder_push_status_code(&egress->participant, STATUS_ROOM_CREATED);
 		}
-		if ((acl_role(chunk->acl, &ingress->real_from) & ACL_MUC_ADMIN) == ACL_MUC_ADMIN) {
+		if (acl_role(chunk->acl, &ingress->real_from) & ACL_MUC_ADMIN) {
 			affiliation = AFFIL_OWNER;
 		} else {
-			if (room->participants_count >= room->max_participants) {
+			if (room->participants.size >= room->participants.max_size) {
 				router_error(chunk, &error_definitions[ERROR_OCCUPANTS_LIMIT]);
 				return;
 			}
@@ -822,8 +824,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 				router_error(chunk, &error_definitions[ERROR_BANNED]);
 				return;
 			}
-			if ((room->flags & MUC_FLAG_MEMBERSONLY) == MUC_FLAG_MEMBERSONLY &&
-					affiliation < AFFIL_MEMBER) {
+			if (room->flags & MUC_FLAG_MEMBERSONLY && affiliation < AFFIL_MEMBER) {
 				router_error(chunk, &error_definitions[ERROR_MEMBERS_ONLY]);
 				return;
 			}
@@ -834,13 +835,12 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 
 		// Send occupants' presences to the new occupant. Skip the first item
 		// as we know this is the one who just joined
-		for (sender = room->participants->next; sender; sender = sender->next) {
+		for (sender = room->participants.first->next; sender; sender = sender->next) {
 			egress->from_nick = sender->nick;
 			egress->participant.affiliation = sender->affiliation;
 			egress->participant.role = sender->role;
 			egress->user_data = sender->presence;
-			if (receiver->role == ROLE_MODERATOR ||
-					(room->flags & MUC_FLAG_SEMIANONYMOUS) != MUC_FLAG_SEMIANONYMOUS) {
+			if (receiver->role == ROLE_MODERATOR || !(room->flags & MUC_FLAG_SEMIANONYMOUS)) {
 				egress->participant.jid = &sender->jid;
 			} else {
 				egress->participant.jid = 0;
@@ -977,7 +977,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
 			return;
 		}
-		if ((room->flags & MUC_FLAG_IQ_PROXY) != MUC_FLAG_IQ_PROXY) {
+		if (!(room->flags & MUC_FLAG_IQ_PROXY)) {
 			router_error(chunk, &error_definitions[ERROR_IQ_PROHIBITED]);
 			return;
 		}
@@ -1143,7 +1143,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 						return;
 					}
 
-					for (receiver = room->participants; receiver; receiver = receiver->next) {
+					for (receiver = room->participants.first; receiver; receiver = receiver->next) {
 						target.affiliation = room_get_affiliation(room, chunk->acl, &receiver->jid);
 						if (target.affiliation != receiver->affiliation) {
 							receiver->role =
@@ -1179,7 +1179,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 				if (BUF_EQ_LIT("destroy", &node_name)) {
 					// TODO(artem): save destruction reason
 					room->flags |= MUC_FLAG_DESTROYED;
-					for (receiver = room->participants; receiver; receiver = receiver->next) {
+					for (receiver = room->participants.first; receiver; receiver = receiver->next) {
 						receiver->role = ROLE_NONE;
 						receiver->affiliation = AFFIL_NONE;
 						push_affected_participant(&first_affected_participant,
@@ -1203,7 +1203,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			current_affected_participant; ) {
 		current_affected_participant->muc_admin_affected = FALSE;
 		egress->participant.status_codes_count = 0;
-		if ((room->flags & MUC_FLAG_DESTROYED) == MUC_FLAG_DESTROYED) {
+		if (room->flags & MUC_FLAG_DESTROYED) {
 			egress->type = 'u';
 		} else {
 			if (current_affected_participant->affiliation == AFFIL_OUTCAST) {

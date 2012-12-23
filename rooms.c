@@ -139,7 +139,7 @@ void rooms_route(RouterChunk *chunk) {
 	for (room = rooms->start; room; room = room->next) {
 		if (!jid_strcmp(&ingress->proxy_to, &room->node, JID_NODE)) {
 			rooms_acquire(room);
-			if ((room->flags & MUC_FLAG_DESTROYED) == MUC_FLAG_DESTROYED) {
+			if (room->flags & MUC_FLAG_DESTROYED) {
 				// This isn't the room you're looking for
 				rooms_release(room);
 			} else {
@@ -155,7 +155,7 @@ void rooms_route(RouterChunk *chunk) {
 			router_error(chunk, &error_definitions[ERROR_ROOM_NOT_FOUND]);
 			return;
 		} else {
-			if ((acl_role(chunk->acl, &ingress->real_from) & ACL_MUC_CREATE) == ACL_MUC_CREATE) {
+			if (acl_role(chunk->acl, &ingress->real_from) & ACL_MUC_CREATE) {
 				room = rooms_create_room(rooms, &ingress->proxy_to);
 			} else {
 				buffer__ptr_cpy(&egress->from_node, &ingress->proxy_to.node);
@@ -172,7 +172,7 @@ void rooms_route(RouterChunk *chunk) {
 	room_route(room, chunk);
 	rooms_release(room);
 
-	if ((room->flags & MUC_FLAG_DESTROYED) == MUC_FLAG_DESTROYED) {
+	if (room->flags & MUC_FLAG_DESTROYED) {
 		rooms_destroy_room(rooms, room);
 	}
 }

@@ -103,7 +103,7 @@ BOOL build_stats(BuilderBuffer *buffer, BuilderPacket *data) {
 
 BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
 	int chunk_size;
-	ParticipantEntry *participant = room->participants;
+	ParticipantEntry *participant = room->participants.first;
 
 	LDEBUG("building room items");
 	for (; participant; participant = participant->next) {
@@ -162,7 +162,7 @@ BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 		} else {
 			BUF_PUSH_BUF(room->node);
 		}
-		BUF_PUSH_FMT(" (%d)", room->participants_count);
+		BUF_PUSH_FMT(" (%d)", room->participants.size);
 		BUF_PUSH_LITERAL("' jid='");
 		BUF_PUSH_BUF(room->node);
 		BUF_PUSH_LITERAL("@");
@@ -222,25 +222,25 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 			"</field>"
 			"<field type='boolean' label='Make room persistent' var='muc#roomconfig_persistentroom'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", (room->flags & MUC_FLAG_PERSISTENTROOM) == MUC_FLAG_PERSISTENTROOM);
+	BUF_PUSH_FMT("%d", room->flags & MUC_FLAG_PERSISTENTROOM);
 	BUF_PUSH_LITERAL(
 				"</value>"
 			"</field>"
 			"<field type='boolean' label='Make room public searchable' var='muc#roomconfig_publicroom'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", (room->flags & MUC_FLAG_PUBLICROOM) == MUC_FLAG_PUBLICROOM);
+	BUF_PUSH_FMT("%d", room->flags & MUC_FLAG_PUBLICROOM);
 	BUF_PUSH_LITERAL(
 				"</value>"
 			"</field>"
 			"<field type='boolean' label='Make participants list public' var='public_list'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", (room->flags & MUC_FLAG_PUBLICPARTICIPANTS) == MUC_FLAG_PUBLICPARTICIPANTS);
+	BUF_PUSH_FMT("%d", room->flags & MUC_FLAG_PUBLICPARTICIPANTS);
 	BUF_PUSH_LITERAL(
 				"</value>"
 			"</field>"
 			"<field type='boolean' label='Make room password protected' var='muc#roomconfig_passwordprotectedroom'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", (room->flags & MUC_FLAG_PASSWORDPROTECTEDROOM) == MUC_FLAG_PASSWORDPROTECTEDROOM);
+	BUF_PUSH_FMT("%d", room->flags & MUC_FLAG_PASSWORDPROTECTEDROOM);
 	BUF_PUSH_LITERAL(
 				"</value>"
 			"</field>"
@@ -252,7 +252,7 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 			"</field>"
 			"<field type='list-single' label='Maximum Number of Occupants' var='muc#roomconfig_maxusers'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", room->max_participants);
+	BUF_PUSH_FMT("%d", room->participants.max_size);
 	BUF_PUSH_LITERAL(
 				"</value>"
 				"<option label='5'><value>5</value></option>"
@@ -267,7 +267,7 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 			"</field>"
 			"<field type='list-single' label='Present real Jabber IDs to' var='muc#roomconfig_whois'>"
 				"<value>");
-	if ((room->flags & MUC_FLAG_SEMIANONYMOUS) == MUC_FLAG_SEMIANONYMOUS) {
+	if (room->flags & MUC_FLAG_SEMIANONYMOUS) {
 		BUF_PUSH_LITERAL("moderators");
 	} else {
 		BUF_PUSH_LITERAL("anyone");
@@ -279,13 +279,13 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 			"</field>"
 			"<field type='boolean' label='Make room members-only' var='muc#roomconfig_membersonly'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", (room->flags & MUC_FLAG_MEMBERSONLY) == MUC_FLAG_MEMBERSONLY);
+	BUF_PUSH_FMT("%d", room->flags & MUC_FLAG_MEMBERSONLY);
 	BUF_PUSH_LITERAL(
 				"</value>"
 			"</field>"
 			"<field type='boolean' label='Make room moderated' var='muc#roomconfig_moderatedroom'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", (room->flags & MUC_FLAG_MODERATEDROOM) == MUC_FLAG_MODERATEDROOM);
+	BUF_PUSH_FMT("%d", room->flags & MUC_FLAG_MODERATEDROOM);
 	BUF_PUSH_LITERAL(
 				"</value>"
 			"</field>"
@@ -297,31 +297,31 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 			"</field>"
 			"<field type='boolean' label='Allow users to change the subject' var='muc#roomconfig_changesubject'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", (room->flags & MUC_FLAG_CHANGESUBJECT) == MUC_FLAG_CHANGESUBJECT);
+	BUF_PUSH_FMT("%d", room->flags & MUC_FLAG_CHANGESUBJECT);
 	BUF_PUSH_LITERAL(
 				"</value>"
 			"</field>"
 			"<field type='boolean' label='Allow users to send private messages' var='allow_private_messages'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", (room->flags & MUC_FLAG_ALLOWPM) == MUC_FLAG_ALLOWPM);
+	BUF_PUSH_FMT("%d", room->flags & MUC_FLAG_ALLOWPM);
 	BUF_PUSH_LITERAL(
 				"</value>"
 			"</field>"
 			"<field type='boolean' label='Allow users to query other users' var='allow_query_users'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", (room->flags & MUC_FLAG_IQ_PROXY) == MUC_FLAG_IQ_PROXY);
+	BUF_PUSH_FMT("%d", room->flags & MUC_FLAG_IQ_PROXY);
 	BUF_PUSH_LITERAL(
 				"</value>"
 			"</field>"
 			"<field type='boolean' label='Allow users to send invites' var='muc#roomconfig_allowinvites'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", (room->flags & MUC_FLAG_INVITES) == MUC_FLAG_INVITES);
+	BUF_PUSH_FMT("%d", room->flags & MUC_FLAG_INVITES);
 	BUF_PUSH_LITERAL(
 				"</value>"
 			"</field>"
 			"<field type='boolean' label='Allow visitors to send status text in presence updates' var='muc#roomconfig_allowvisitorstatus'>"
 				"<value>");
-	BUF_PUSH_FMT("%d", (room->flags & MUC_FLAG_VISITORPRESENCE) == MUC_FLAG_VISITORPRESENCE);
+	BUF_PUSH_FMT("%d", room->flags & MUC_FLAG_VISITORPRESENCE);
 	BUF_PUSH_LITERAL(
 				"</value>"
 			"</field>"

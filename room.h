@@ -14,15 +14,15 @@
 #define ROLE_PARTICIPANT 2
 #define ROLE_MODERATOR 3
 
-extern const char** affiliation_names;
-extern const int* affiliation_name_sizes;
+extern const char* affiliation_names[];
+extern const int affiliation_name_sizes[];
 
 #define AFFIL_UNCHANGED -2
-#define AFFIL_NONE -1
 #define AFFIL_OUTCAST 0
-#define AFFIL_MEMBER 1
-#define AFFIL_ADMIN 2
-#define AFFIL_OWNER 3
+#define AFFIL_NONE 1
+#define AFFIL_MEMBER 2
+#define AFFIL_ADMIN 3
+#define AFFIL_OWNER 4
 
 extern const char* role_names[];
 extern const int role_name_sizes[];
@@ -46,13 +46,13 @@ typedef struct AffiliationEntry {
 } AffiliationEntry;
 
 typedef struct ParticipantEntry {
-	Jid jid, fake_jid;
+	Jid jid;
 	BufferPtr nick;
 	int affiliation, role;
 	BufferPtr presence;
 	time_t last_message_time;
 
-	// This flag is used to avoid duplicated when building affected list
+	// This flag is used to avoid duplicates when building affected list
 	BOOL muc_admin_affected;
 	struct ParticipantEntry *muc_admin_next_affected;
 
@@ -95,17 +95,19 @@ typedef struct Room {
 
 	int flags;
 	int default_role;
-	int max_participants;
-	int max_history_size;
 	int _unused[12];
 
-	ParticipantEntry *participants;
-	int participants_count;
+	struct ParticipantsList {
+		ParticipantEntry *first;
+		int size, max_size;
+	} participants;
 
-	AffiliationEntry *affiliations[4];
+	AffiliationEntry *affiliations[5];
 
-	HistoryEntry *history, *history_last;
-	int history_entries_count;
+	struct HistoryList {
+		HistoryEntry *first, *last;
+		int size, max_size;
+	} history;
 
 	struct Room *prev, *next;
 	pthread_mutex_t sync;
