@@ -274,6 +274,7 @@ ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid) {
 		// We should still be able to find that participant.
 		mode = JID_NODE | JID_HOST;
 		// FIXME(artem): when there are multiple joins from a single JID, this may fail
+		// we should probably create a cache of IDs for the queries
 	}
 
 	LDEBUG("finding rJID '%.*s' in room '%.*s', mode %d",
@@ -870,7 +871,7 @@ static int role_by_name(BufferPtr *name) {
 }
 
 static int next_muc_admin_item(BufferPtr *node, ParticipantEntry *target) {
-	BufferPtr buffer;
+	BufferPtr current_item;
 	Buffer node_name;
 	XmlAttr node_attr;
 
@@ -879,17 +880,16 @@ static int next_muc_admin_item(BufferPtr *node, ParticipantEntry *target) {
 	target->affiliation = AFFIL_UNCHANGED;
 	BPT_INIT(&target->nick);
 
-	buffer = *node;
-	for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
-			node->data = buffer.data) {
-		node->end = buffer.data;
-		xmlfsm_node_name(node, &node_name);
+	for (current_item = *node; xmlfsm_skip_node(node, 0, 0) == XMLPARSE_SUCCESS;
+			current_item.data = node->data) {
+		current_item.end = node->data;
+		xmlfsm_node_name(&current_item, &node_name);
 
 		if (!BUF_EQ_LIT("item", &node_name)) {
 			continue;
 		}
 
-		while (xmlfsm_get_attr(node, &node_attr) == XMLPARSE_SUCCESS) {
+		while (xmlfsm_get_attr(&current_item, &node_attr) == XMLPARSE_SUCCESS) {
 			if (BPT_EQ_LIT("affiliation", &node_attr.name)) {
 				target->affiliation = affiliation_by_name(&node_attr.value);
 				if (target->affiliation == AFFIL_UNCHANGED) {
