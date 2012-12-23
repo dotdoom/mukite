@@ -61,7 +61,9 @@ void rooms_destroy_room(Rooms *rooms, Room *room) {
 	} else {
 		rooms->start = room->next;
 	}
-	if (!room->next) {
+	if (room->next) {
+		room->next->prev = room->prev;
+	} else {
 		rooms->end = room->prev;
 	}
 	--rooms->count;

@@ -624,10 +624,7 @@ void room_history_push(Room *room, RouterChunk *chunk, ParticipantEntry *sender)
 	new_item->delay = chunk->config->timer_thread.start +
 		chunk->config->timer_thread.ticks / TIMER_RESOLUTION;
 
-	LDEBUG("pushing new history item");
-
 	if (room->history) {
-		LDEBUG("pushing new history item");
 		while (room->history_entries_count >= room->max_history_size) {
 			next = room->history->next;
 			if (next) {
