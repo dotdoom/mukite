@@ -29,6 +29,7 @@ typedef struct {
 #define BUILD_IQ_LAST 2
 #define BUILD_IQ_TIME 3
 #define BUILD_IQ_STATS 4
+#define BUILD_IQ_EMPTY 5
 
 #define BUILD_IQ_DISCO_INFO 11
 #define BUILD_IQ_DISCO_ITEMS 12

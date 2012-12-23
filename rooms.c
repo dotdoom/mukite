@@ -33,21 +33,6 @@ void rooms_destroy(Rooms *rooms) {
 	// TODO(artem): may want to clean all the rooms
 }
 
-Room *rooms_find(Rooms *rooms, Jid *jid) {
-	Room *room = 0;
-
-	pthread_rwlock_rdlock(&rooms->sync);
-	LDEBUG("searching for the existing room '%.*s'", JID_LEN(jid), JID_STR(jid));
-	for (room = rooms->start; room; room = room->next) {
-		if (!jid_strcmp(jid, &room->node, JID_NODE)) {
-			break;
-		}
-	}
-	pthread_rwlock_unlock(&rooms->sync);
-
-	return room;
-}
-
 Room *rooms_create_room(Rooms *rooms, Jid *jid) {
 	Room *room = 0;
 
@@ -63,9 +48,25 @@ Room *rooms_create_room(Rooms *rooms, Jid *jid) {
 	}
 	rooms->end = room;
 	++rooms->count;
+	rooms_acquire(room);
 	pthread_rwlock_unlock(&rooms->sync);
 
 	return room;
+}
+
+void rooms_destroy_room(Rooms *rooms, Room *room) {
+	pthread_rwlock_wrlock(&rooms->sync);
+	if (room->prev) {
+		room->prev->next = room->next;
+	} else {
+		rooms->start = room->next;
+	}
+	if (!room->next) {
+		rooms->end = room->prev;
+	}
+	--rooms->count;
+	room_destroy(room);
+	pthread_rwlock_unlock(&rooms->sync);
 }
 
 BOOL registered_nicks_serialize(RegisteredNick *list, FILE *output) {
@@ -130,7 +131,23 @@ void rooms_route(RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
 
-	if (!(room = rooms_find(rooms, &ingress->proxy_to))) {
+	pthread_rwlock_rdlock(&rooms->sync);
+	LDEBUG("searching for the existing room '%.*s'",
+			JID_LEN(&ingress->proxy_to), JID_STR(&ingress->proxy_to));
+	for (room = rooms->start; room; room = room->next) {
+		if (!jid_strcmp(&ingress->proxy_to, &room->node, JID_NODE)) {
+			rooms_acquire(room);
+			if ((room->flags & MUC_FLAG_DESTROYED) == MUC_FLAG_DESTROYED) {
+				// This isn't the room you're looking for
+				rooms_release(room);
+			} else {
+				break;
+			}
+		}
+	}
+	pthread_rwlock_unlock(&rooms->sync);
+
+	if (!room) {
 		if (ingress->name != 'p' || ingress->type == 'u') {
 			// this is not a presence, or presence type is 'unavailable'
 			router_error(chunk, &error_definitions[ERROR_ROOM_NOT_FOUND]);
@@ -149,9 +166,11 @@ void rooms_route(RouterChunk *chunk) {
 		}
 	}
 
-	rooms_acquire(room);
 	egress->from_node = room->node;
 	room_route(room, chunk);
-	// TODO(artem); if (!room->participants && !(room->flags & MUC_FLAG_PERSISTENTROOM)) then remove the room
 	rooms_release(room);
+
+	if ((room->flags & MUC_FLAG_DESTROYED) == MUC_FLAG_DESTROYED) {
+		rooms_destroy_room(rooms, room);
+	}
 }

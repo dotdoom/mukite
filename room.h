@@ -73,6 +73,8 @@ typedef struct ParticipantEntry {
 #define MUC_FLAG_INVITES (1 << 11)
 #define MUC_FLAG_VISITORSPM (1 << 12)
 #define MUC_FLAG_VISITORPRESENCE (1 << 13)
+#define MUC_FLAG_JUST_CREATED (1 << 14)
+#define MUC_FLAG_DESTROYED (1 << 15)
 
 #define MUC_FLAGS_DEFAULT (MUC_FLAG_ALLOWPM | \
 	MUC_FLAG_CHANGESUBJECT | \
@@ -81,6 +83,7 @@ typedef struct ParticipantEntry {
 	MUC_FLAG_PUBLICPARTICIPANTS | \
 	MUC_FLAG_IQ_PROXY | \
 	MUC_FLAG_SEMIANONYMOUS | \
+	MUC_FLAG_JUST_CREATED | \
 	MUC_FLAG_INVITES)
 
 typedef struct Room {

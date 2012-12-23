@@ -153,6 +153,8 @@ BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 	Room *room = rooms->start;
 
 	LDEBUG("building component items (list of rooms)");
+
+	pthread_rwlock_rdlock(&rooms->sync);
 	for (; room; room = room->next) {
 		BUF_PUSH_LITERAL("<item name='");
 		if (room->title.size) {
@@ -167,6 +169,7 @@ BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 		BUF_PUSH_BUF(*host);
 		BUF_PUSH_LITERAL("'/>");
 	}
+	pthread_rwlock_unlock(&rooms->sync);
 
 	return TRUE;
 }
@@ -462,6 +465,8 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 			}
 		} else if (packet->name == 'i') {
 			switch (packet->iq_type) {
+				case BUILD_IQ_EMPTY:
+					break;
 				case BUILD_IQ_VERSION:
 					BUF_PUSH_LITERAL(
 							"<query xmlns='jabber:iq:version'>"

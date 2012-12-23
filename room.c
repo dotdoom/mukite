@@ -152,6 +152,37 @@ void room_init(Room *room, BufferPtr *node) {
 	room->default_role = ROLE_PARTICIPANT;
 }
 
+void room_destroy(Room *room) {
+	AffiliationEntry *t_affiliation;
+	HistoryEntry *t_history;
+	int i;
+
+	LASSERT(!room->participants, "Attempt to destroy a non-empty room!");
+	free(room->node.data);
+	free(room->title.data);
+	free(room->description.data);
+	free(room->subject.data);
+	free(room->password.data);
+	for (i = AFFIL_OUTCAST; i <= AFFIL_OWNER; ++i) {
+		while (room->affiliations[i]) {
+			t_affiliation = room->affiliations[i];
+			room->affiliations[i] = room->affiliations[i]->next;
+			jid_destroy(&t_affiliation->jid);
+			free(t_affiliation->reason.data);
+			free(t_affiliation);
+		}
+	}
+	while (room->history) {
+		t_history = room->history;
+		room->history = room->history->next;
+		free(t_history->nick.data);
+		free(t_history->header.data);
+		free(t_history->inner.data);
+		free(t_history);
+	}
+	pthread_mutex_destroy(&room->sync);
+}
+
 int room_role_for_affiliation(Room *room, int affiliation) {
 	switch (affiliation) {
 		case AFFIL_MEMBER:
@@ -250,6 +281,11 @@ void room_leave(Room *room, ParticipantEntry *participant) {
 		free(participant->presence.data);
 	}
 	free(participant->nick.data);
+
+	if ((room->flags & MUC_FLAG_PERSISTENTROOM) != MUC_FLAG_PERSISTENTROOM &&
+			!room->participants) {
+		room->flags |= MUC_FLAG_DESTROYED;
+	}
 }
 
 ParticipantEntry *room_participant_by_nick(Room *room, BufferPtr *nick) {
@@ -367,7 +403,7 @@ BOOL affiliations_deserialize(AffiliationEntry **list, FILE *input, int limit) {
 	return TRUE;
 }
 
-static BOOL room_add_affiliation(Room *room, int sender_affiliation, int affiliation, Jid *jid) {
+static BOOL room_affiliation_add(Room *room, int sender_affiliation, int affiliation, Jid *jid) {
 	int list;
 	AffiliationEntry *affiliation_entry = 0,
 					 *previous_affiliation_entry = 0;
@@ -574,9 +610,9 @@ BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallback *se
 	return TRUE;
 }
 
-void history_push(Room *room, RouterChunk *chunk, ParticipantEntry *sender) {
+void room_history_push(Room *room, RouterChunk *chunk, ParticipantEntry *sender) {
 	HistoryEntry *next = 0, *new_item = 0;
-	if (!room->max_history_size) {
+	if (room->max_history_size <= 0) {
 		return;
 	}
 
@@ -592,7 +628,7 @@ void history_push(Room *room, RouterChunk *chunk, ParticipantEntry *sender) {
 
 	if (room->history) {
 		LDEBUG("pushing new history item");
-		if (room->history_entries_count == room->max_history_size) {
+		while (room->history_entries_count >= room->max_history_size) {
 			next = room->history->next;
 			if (next) {
 				next->prev = 0;
@@ -701,7 +737,7 @@ static void route_message(Room *room, RouterChunk *chunk) {
 		sender->last_message_time = chunk->config->timer_thread.ticks;
 
 		router_cleanup(ingress);
-		history_push(room, chunk, sender);
+		room_history_push(room, chunk, sender);
 		send_to_participants(chunk, room->participants, 1 << 30);
 	}
 }
@@ -772,9 +808,9 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 		// TODO(artem): check password
 		// TODO(artem): load room history as requested
 
-		if (!room->participants && (room->flags & MUC_FLAG_PERSISTENTROOM) != MUC_FLAG_PERSISTENTROOM) {
-			// This is empty non-persistent room => thus it has just been created
-			room_add_affiliation(room, AFFIL_OWNER, AFFIL_OWNER, &ingress->real_from);
+		if ((room->flags & MUC_FLAG_JUST_CREATED) == MUC_FLAG_JUST_CREATED) {
+			room_affiliation_add(room, AFFIL_OWNER, AFFIL_OWNER, &ingress->real_from);
+			room->flags &= ~MUC_FLAG_JUST_CREATED;
 		}
 		if ((acl_role(chunk->acl, &ingress->real_from) & ACL_MUC_ADMIN) == ACL_MUC_ADMIN) {
 			affiliation = AFFIL_OWNER;
@@ -1105,7 +1141,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 						return;
 					}
 
-					if (!room_add_affiliation(room, sender->affiliation, target.affiliation, &target.jid)) {
+					if (!room_affiliation_add(room, sender->affiliation, target.affiliation, &target.jid)) {
 						router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
 						return;
 					}
@@ -1144,7 +1180,15 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 
 			if (xmlfsm_node_name(&node, &node_name) == XMLPARSE_SUCCESS) {
 				if (BUF_EQ_LIT("destroy", &node_name)) {
-					LWARN("THE ROOM IS DESTROYED");
+					// TODO(artem): save destruction reason
+					room->flags |= MUC_FLAG_DESTROYED;
+					for (receiver = room->participants; receiver; receiver = receiver->next) {
+						receiver->role = ROLE_NONE;
+						receiver->affiliation = AFFIL_NONE;
+						push_affected_participant(&first_affected_participant,
+								&current_affected_participant, receiver);
+					}
+					egress->iq_type = BUILD_IQ_EMPTY;
 				}
 			}
 		}
@@ -1157,19 +1201,23 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 		jid_destroy(&egress->to);
 	}
 
+	// TODO(artem): add the destruction initiator and reason (if needed)
 	for (current_affected_participant = first_affected_participant;
-			current_affected_participant;
-			current_affected_participant = current_affected_participant->muc_admin_next_affected) {
+			current_affected_participant; ) {
 		current_affected_participant->muc_admin_affected = FALSE;
 		egress->participant.status_codes_count = 0;
-		if (current_affected_participant->affiliation == AFFIL_OUTCAST) {
-			builder_push_status_code(&egress->participant, STATUS_BANNED);
-			egress->type = 'u';
-		} else if (current_affected_participant->role == ROLE_NONE) {
-			builder_push_status_code(&egress->participant, STATUS_KICKED);
+		if ((room->flags & MUC_FLAG_DESTROYED) == MUC_FLAG_DESTROYED) {
 			egress->type = 'u';
 		} else {
-			egress->type = '\0';
+			if (current_affected_participant->affiliation == AFFIL_OUTCAST) {
+				builder_push_status_code(&egress->participant, STATUS_BANNED);
+				egress->type = 'u';
+			} else if (current_affected_participant->role == ROLE_NONE) {
+				builder_push_status_code(&egress->participant, STATUS_KICKED);
+				egress->type = 'u';
+			} else {
+				egress->type = '\0';
+			}
 		}
 
 		if (egress->type == 'u') {
@@ -1180,7 +1228,11 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 
 		room_broadcast_presence(room, egress, &chunk->send, current_affected_participant);
 		if (current_affected_participant->role == ROLE_NONE) {
+			first_affected_participant = current_affected_participant->muc_admin_next_affected;
 			room_leave(room, current_affected_participant);
+			current_affected_participant = first_affected_participant;
+		} else {
+			current_affected_participant = current_affected_participant->muc_admin_next_affected;
 		}
 	}
 }
