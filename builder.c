@@ -327,13 +327,26 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 	return TRUE;
 }
 
-BOOL build_iq_time(BuilderBuffer *buffer) {
-	struct tm tm;
-	time_t tm_t;
-	char str_buffer[40];
+static BOOL build_strftime(BuilderBuffer *buffer, time_t *tm_t, BOOL utc_mark) {
 	int chunk_size;
+	struct tm tm;
+	gmtime_r(tm_t, &tm);
+	if (!(chunk_size = strftime(buffer->data_end, buffer->end - buffer->data_end,
+					utc_mark ? "%Y-%m-%dT%T" : "%Y%m%dT%T", &tm))) {
+		return FALSE;
+	}
+	buffer->data_end += chunk_size;
+	if (utc_mark) {
+		BUF_PUSH_LITERAL("Z");
+	}
+	return TRUE;
+}
 
-	LDEBUG("building iq:time response");
+BOOL build_iq_time(BuilderBuffer *buffer) {
+	time_t tm_t;
+	struct tm tm;
+	char str_buffer[10];
+	int chunk_size;
 
 	time(&tm_t);
 	localtime_r(&tm_t, &tm);
@@ -346,12 +359,10 @@ BOOL build_iq_time(BuilderBuffer *buffer) {
 	BUF_PUSH_LITERAL("<tzo>");
 	BUF_PUSH_STR(str_buffer);
 	BUF_PUSH_LITERAL("</tzo><utc>");
-
-	gmtime_r(&tm_t, &tm);
-	strftime(str_buffer, sizeof(str_buffer), "%Y-%m-%dT%T", &tm);
-
-	BUF_PUSH_STR(str_buffer);
-	BUF_PUSH_LITERAL("Z</utc>");
+	if (!build_strftime(buffer, &tm_t, TRUE)) {
+		return FALSE;
+	}
+	BUF_PUSH_LITERAL("</utc>");
 	return TRUE;
 }
 
@@ -531,9 +542,21 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 	}
 
 	if (packet->delay) {
-		BUF_PUSH_LITERAL(
-				"<delay xmlns='urn:xmpp:delay' from='hurr@conference.durr.purr' stamp='2012-12-05T14:48:28Z'/>"
-				"<x xmlns='jabber:x:delay' stamp='20121205T14:48:28'/>");
+		BUF_PUSH_LITERAL("<delay xmlns='urn:xmpp:delay' from='");
+		if (!BUF_NULL(&packet->from_node)) {
+			BUF_PUSH_BUF(packet->from_node);
+			BUF_PUSH_LITERAL("@");
+		}
+		BUF_PUSH_BUF(packet->from_host);
+		BUF_PUSH_LITERAL("' stamp='");
+		if (!build_strftime(buffer, &packet->delay, TRUE)) {
+			return FALSE;
+		}
+		BUF_PUSH_LITERAL("'/><x xmlns='jabber:x:delay' stamp='");
+		if (!build_strftime(buffer, &packet->delay, FALSE)) {
+			return FALSE;
+		}
+		BUF_PUSH_LITERAL("'/>");
 	}
 
 	switch (packet->name) {

@@ -585,7 +585,8 @@ void history_push(Room *room, RouterChunk *chunk, ParticipantEntry *sender) {
 	buffer_ptr_cpy(&new_item->nick, &sender->nick);
 	buffer_ptr_cpy(&new_item->header, &chunk->ingress.header);
 	buffer_ptr_cpy(&new_item->inner, &chunk->ingress.inner);
-	new_item->delay = 1; // TODO(artem): put a real timestamp in new_item->delay
+	new_item->delay = chunk->config->timer_thread.start +
+		chunk->config->timer_thread.ticks / TIMER_RESOLUTION;
 
 	LDEBUG("pushing new history item");
 
