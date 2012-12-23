@@ -807,6 +807,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	ParticipantEntry *sender = 0, *receiver = 0;
 	int affiliation;
 	BufferPtr new_nick;
+	BOOL just_joined = FALSE;
 
 	if (!erase_muc_user_node(ingress)) {
 		return; // stanza is obviously not valid, just drop silently
@@ -909,7 +910,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 			send_to_participants(chunk, receiver, 1);
 		}
 		sender = receiver;
-		receiver = 0;
+		just_joined = TRUE;
 	}
 
 	// Broadcast sender's presence to all participants
@@ -917,8 +918,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	// TODO(artem): set role = none if type = unavailable
 	room_broadcast_presence(room, egress, &chunk->send, sender);
 
-	if (!receiver) {
-		// This indicates that the user has just joined the room
+	if (just_joined) {
 		// TODO(artem): parse maxchars and maxstanzas
 		room_history_send(room, chunk, room_history_first_item(room, -1, -1), sender);
 		room_subject_send(room, chunk, sender);
