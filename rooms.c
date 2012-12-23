@@ -22,33 +22,6 @@ static XMPPError error_definitions[] = {
 	}
 };
 
-/*
-	<iq from="comicslate.org" type="result" to="dot@sys/Laptop" id="aad1a">
-		<query xmlns="http://jabber.org/protocol/disco#info">
-			<identity category="conference" type="text" name="Chatrooms"/>
-			<feature var="http://jabber.org/protocol/disco#info"/>
-			<feature var="http://jabber.org/protocol/disco#items"/>
-			<feature var="http://jabber.org/protocol/muc"/>
-			<feature var="http://jabber.org/protocol/muc#unique"/>
-			<feature var="jabber:iq:register"/>
-			<feature var="http://jabber.org/protocol/rsm"/>
-			<feature var="vcard-temp"/>
-			<x xmlns="jabber:x:data" type="result">
-				<field type="hidden" var="FORM_TYPE">
-					<value>http://jabber.org/network/serverinfo</value>
-				</field>
-			</x>
-		</query>
-	</iq>
-
-
-	<iq from="comicslate.org" type="result" to="dot@sys/Laptop" id="aad2a">
-		<query xmlns="http://jabber.org/protocol/disco#items">
-			<item name="chat (8)" jid="chat@comicslate.org"/>
-		</query>
-	</iq>
-*/
-
 void rooms_init(Rooms *rooms) {
 	rooms->start = rooms->end = 0;
 	rooms->count = 0;
@@ -75,7 +48,7 @@ Room *rooms_find(Rooms *rooms, Jid *jid) {
 	return room;
 }
 
-Room *rooms_create(Rooms *rooms, Jid *jid) {
+Room *rooms_create_room(Rooms *rooms, Jid *jid) {
 	Room *room = 0;
 
 	pthread_rwlock_wrlock(&rooms->sync);
@@ -164,7 +137,7 @@ void rooms_route(RouterChunk *chunk) {
 			return;
 		} else {
 			if ((acl_role(chunk->acl, &ingress->real_from) & ACL_MUC_CREATE) == ACL_MUC_CREATE) {
-				room = rooms_create(rooms, &ingress->proxy_to);
+				room = rooms_create_room(rooms, &ingress->proxy_to);
 			} else {
 				buffer__ptr_cpy(&egress->from_node, &ingress->proxy_to.node);
 				buffer_ptr_cpy(&egress->from_nick, &ingress->proxy_to.resource);

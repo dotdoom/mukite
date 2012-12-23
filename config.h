@@ -8,6 +8,7 @@
 #include "rooms.h"
 #include "worker.h"
 #include "acl.h"
+#include "timer.h"
 
 #define WORKERS_COUNT_LIMIT 1024
 
@@ -36,6 +37,7 @@ typedef struct {
 	struct {
 		int threads;
 		int buffer;
+		int deciseconds_limit;
 		char data_file[CONFIG_OPTION_LENGTH];
 	} worker;
 
@@ -58,9 +60,10 @@ typedef struct {
 		WorkerConfig threads[WORKERS_COUNT_LIMIT];
 	} worker_threads;
 
+	TimerConfig timer_thread;
+
 	Rooms rooms;
 	ACLConfig acl_config;
-	time_t startup;
 } Config;
 
 void config_init(Config *, char *filename);

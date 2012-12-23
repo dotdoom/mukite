@@ -19,6 +19,7 @@ component.password secret
 worker.data_file rooms.dat
 worker.threads 7
 worker.buffer 1048576
+worker.deciseconds_limit 2
 
 ## Reader (executed inside of wrapper) config.
 # Queue size is the maximum number of stanzas being kept ready to be processed.

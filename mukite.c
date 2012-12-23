@@ -74,6 +74,7 @@ int main(int argc, char **argv) {
 	LINFO("%s starting", APP_NAME);
 
 	config_init(&config, argc > 1 ? argv[1] : 0);
+	pthread_create(&config.timer_thread.thread, 0, timer_thread_entry, (void *)&config.timer_thread);
 	if (!config_read(&config)) {
 		return 1;
 	}

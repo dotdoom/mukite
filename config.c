@@ -59,6 +59,7 @@ BOOL config_read(Config *config) {
 		READ_CONFIG_STR(worker.data_file)
 		READ_CONFIG_INT(worker.threads)
 		READ_CONFIG_INT(worker.buffer)
+		READ_CONFIG_INT(worker.deciseconds_limit);
 
 		READ_CONFIG_STR(acl.data_file)
 		READ_CONFIG_INT(acl.default_role)
@@ -88,7 +89,8 @@ void config_init(Config *config, char *filename) {
 	config->writer.buffer = 1 << 20;
 	config->worker.threads = 3;
 	config->worker.buffer = 1 << 20;
-	config->startup = time(0);
+	config->worker.deciseconds_limit = 2;
+	time(&config->timer_thread.start);
 	rooms_init(&config->rooms);
 }
 

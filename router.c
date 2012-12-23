@@ -95,7 +95,7 @@ void component_handle(RouterChunk *chunk) {
 						egress->iq_type = BUILD_IQ_VERSION;
 					} else if (BPT_EQ_LIT("jabber:iq:last", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_LAST;
-						egress->iq_last.seconds = difftime(time(0), chunk->config->startup);
+						egress->iq_last.seconds = chunk->config->timer_thread.ticks / TIMER_RESOLUTION;
 					} else if (BPT_EQ_LIT("http://jabber.org/protocol/stats", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_STATS;
 						egress->iq_stats.request = node;

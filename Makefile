@@ -8,6 +8,7 @@ EXECUTABLE=mukite
 XMCOMP=xmcomp/xmcomp.o
 SOURCES=$(EXECUTABLE).c \
 	worker.c \
+	timer.c \
 	router.c \
 	builder.c \
 	jid.c \
