@@ -59,7 +59,7 @@ BOOL config_read(Config *config) {
 		READ_CONFIG_STR(worker.data_file)
 		READ_CONFIG_INT(worker.threads)
 		READ_CONFIG_INT(worker.buffer)
-		READ_CONFIG_INT(worker.deciseconds_limit);
+		READ_CONFIG_INT(worker.deciseconds_limit)
 
 		READ_CONFIG_STR(acl.data_file)
 		READ_CONFIG_INT(acl.default_role)
