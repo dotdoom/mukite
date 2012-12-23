@@ -5,8 +5,8 @@
 
 #define ACL_NORMAL 0
 #define ACL_MUC_CREATE 1
-#define ACL_MUC_ADMIN 3
-#define ACL_COMPONENT_ADMIN 7
+#define ACL_MUC_ADMIN 2
+#define ACL_COMPONENT_ADMIN 3
 
 typedef struct ACLEntry {
 	Jid jid;

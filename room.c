@@ -223,7 +223,7 @@ static int room_get_affiliation(Room *room, ACLConfig *acl, Jid *jid) {
 	AffiliationEntry *entry = 0;
 	int affiliation;
 
-	if (acl_role(acl, jid) & ACL_MUC_ADMIN) {
+	if (acl_role(acl, jid) >= ACL_MUC_ADMIN) {
 		return AFFIL_OWNER;
 	}
 
@@ -811,7 +811,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 			room->flags &= ~MUC_FLAG_JUST_CREATED;
 			builder_push_status_code(&egress->participant, STATUS_ROOM_CREATED);
 		}
-		if (acl_role(chunk->acl, &ingress->real_from) & ACL_MUC_ADMIN) {
+		if (acl_role(chunk->acl, &ingress->real_from) >= ACL_MUC_ADMIN) {
 			affiliation = AFFIL_OWNER;
 		} else {
 			if (room->participants.size >= room->participants.max_size) {
@@ -881,7 +881,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 static int affiliation_by_name(BufferPtr *name) {
 	int affiliation;
 
-	for (affiliation = AFFIL_NONE; affiliation <= AFFIL_OWNER; ++affiliation) {
+	for (affiliation = AFFIL_OUTCAST; affiliation <= AFFIL_OWNER; ++affiliation) {
 		if (BPT_EQ_BIN(affiliation_names[affiliation], name, affiliation_name_sizes[affiliation])) {
 			return affiliation;
 		}
@@ -1063,7 +1063,8 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			}
 
 			if (next_muc_admin_item(&node, &target) <= 0 ||
-					target.affiliation == AFFIL_UNCHANGED) {
+					target.affiliation == AFFIL_UNCHANGED ||
+					target.affiliation == AFFIL_NONE) {
 				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
 				return;
 			}
