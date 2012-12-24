@@ -146,3 +146,22 @@ int xmlfsm_node_name(BufferPtr *buffer, Buffer *name) {
 
 	return XMLPARSE_SUCCESS;
 }
+
+BOOL xmlfsm_skip_attrs(BufferPtr *buffer) {
+	XmlAttr attr;
+	int last_get_attr_result;
+	while ((last_get_attr_result = xmlfsm_get_attr(buffer, &attr)) == XMLPARSE_SUCCESS) {
+		;
+	}
+	return last_get_attr_result == XMLNODE_NOATTR;
+}
+
+BOOL xmlfsm_skipto_attr(BufferPtr *buffer, char *name, XmlAttr *attr) {
+	int name_size = strlen(name);
+	while (xmlfsm_get_attr(buffer, attr) == XMLPARSE_SUCCESS) {
+		if (BPT_EQ_BIN(name, &attr->name, name_size)) {
+			return TRUE;
+		}
+	}
+	return FALSE;
+}

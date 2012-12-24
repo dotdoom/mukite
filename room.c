@@ -131,6 +131,12 @@ static XMPPError error_definitions[] = {
 		.name = "forbidden",
 		.type = "cancel",
 		.text = "Visitors are not allowed to update their presence in this room"
+	}, {
+#define ERROR_PASSWORD 14
+		.code = "403",
+		.name = "not-authorized",
+		.type = "modify",
+		.text = "This room is password protected and the password was not supplied or is incorrect"
 	}
 };
 
@@ -533,46 +539,6 @@ BOOL room_deserialize(Room *room, FILE *input) {
 		affiliations_deserialize(&room->affiliations[AFFIL_OUTCAST], input, AFFILIATION_LIST_LIMIT);
 }
 
-BOOL erase_muc_user_node(IncomingPacket *packet) {
-	BufferPtr buffer = packet->inner, node = buffer;
-	Buffer node_name;
-	XmlAttr attr;
-	int erase_index = 0;
-	char *node_start = 0;
-
-	// First find the next free index of 'erase' block
-	for (; erase_index < MAX_ERASE_CHUNKS; ++erase_index) {
-		if (!packet->erase[erase_index].data) {
-			break;
-		}
-	}
-
-	for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS; node.data = buffer.data) {
-		node.end = buffer.data;
-		node_start = node.data;
-
-		xmlfsm_node_name(&node, &node_name);
-		if (node_name.size == 1 && *node_name.data == 'x') {
-			while (xmlfsm_get_attr(&node, &attr) == XMLPARSE_SUCCESS) {
-				if (
-						BPT_EQ_LIT("xmlns", &attr.name) &&
-						BPT_EQ_LIT("http://jabber.org/protocol/muc#user", &attr.value)) {
-					LDEBUG("found a muc#user node, setting erase");
-					if (erase_index == MAX_ERASE_CHUNKS) {
-						LWARN("cannot allocate an erase chunk; muc#user is not removable, thus dropping stanza");
-						return FALSE;
-					}
-					packet->erase[erase_index].data = node_start;
-					packet->erase[erase_index].end = node.end;
-					++erase_index;
-				}
-			}
-		}
-	}
-
-	return TRUE;
-}
-
 static BOOL get_subject_node(BufferPtr *packet, BufferPtr *subject) {
 	BufferPtr buffer = *packet;
 	Buffer node_name;
@@ -582,12 +548,10 @@ static BOOL get_subject_node(BufferPtr *packet, BufferPtr *subject) {
 			xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS; subject->data = buffer.data) {
 		node_start = subject->data;
 		subject->end = buffer.data;
-		LDEBUG("SEARCHING FOR SUBJECT: '%.*s'", BPT_SIZE(subject), subject->data);
 
 		xmlfsm_node_name(subject, &node_name);
 		if (BUF_EQ_LIT("subject", &node_name)) {
 			subject->data = node_start;
-			LDEBUG("SUBJECT FOUND: '%.*s'", BPT_SIZE(subject), subject->data);
 			return TRUE;
 		}
 	}
@@ -682,17 +646,33 @@ void room_history_push(Room *room, RouterChunk *chunk, ParticipantEntry *sender)
 	}
 }
 
-static HistoryEntry *room_history_first_item(Room *room, int maxchars, int maxstanzas) {
+typedef struct {
+	int history_max_stanzas,
+		history_max_chars,
+		history_seconds;
+	BufferPtr password;
+} MucNode;
+
+
+static HistoryEntry *room_history_first_item(Room *room, MucNode *muc_node) {
 	HistoryEntry *first_item = 0;
-	if (maxchars < 0 && maxstanzas < 0) {
+	time_t now;
+	if (muc_node->history_max_chars < 0 && muc_node->history_max_stanzas < 0 &&
+			muc_node->history_seconds < 0) {
 		// shortcut
 		return room->history.first;
 	}
+
+	time(&now);
 	for (first_item = room->history.last; first_item; first_item = first_item->prev) {
-		if (maxchars >= 0 && (maxchars -= BPT_SIZE(&first_item->inner)) < 0) {
-			return first_item->next;
-		}
-		if (maxstanzas >= 0 && !maxstanzas--) {
+		if (
+				(muc_node->history_max_chars >= 0 &&
+				 (muc_node->history_max_chars -= BPT_SIZE(&first_item->inner)) < 0) ||
+				(muc_node->history_max_stanzas >= 0 &&
+				 !muc_node->history_max_stanzas--) ||
+				(muc_node->history_seconds >= 0 &&
+				 muc_node->history_seconds < difftime(now, first_item->delay))
+		   ) {
 			return first_item->next;
 		}
 	}
@@ -807,6 +787,95 @@ static void route_message(Room *room, RouterChunk *chunk) {
 	}
 }
 
+static int parse_int(char *data, char *end) {
+	char buffer[11];
+	if (end - data >= sizeof(buffer)) {
+		return 0;
+	} else {
+		memcpy(buffer, data, end - data);
+		buffer[end - data] = 0;
+		return atoi(buffer);
+	}
+}
+
+static void parse_muc_node(BufferPtr *buffer, MucNode *muc_node) {
+	BufferPtr node = *buffer;
+	Buffer node_name;
+	XmlAttr attr;
+	for (; xmlfsm_skip_node(buffer, 0, 0) == XMLPARSE_SUCCESS; node.data = buffer->data) {
+		node.end = buffer->data;
+		xmlfsm_node_name(&node, &node_name);
+		if (BUF_EQ_LIT("password", &node_name)) {
+			if (xmlfsm_skip_attrs(&node)) {
+				muc_node->password = node;
+				muc_node->password.end -= sizeof("</password>");
+			}
+		} else if (BUF_EQ_LIT("history", &node_name)) {
+			while (xmlfsm_get_attr(&node, &attr) == XMLPARSE_SUCCESS) {
+				if (BPT_EQ_LIT("maxstanzas", &attr.name)) {
+					muc_node->history_max_stanzas = parse_int(attr.value.data, attr.value.end);
+				} else if (BPT_EQ_LIT("maxchars", &attr.name)) {
+					muc_node->history_max_chars = parse_int(attr.value.data, attr.value.end);
+				} else if (BPT_EQ_LIT("seconds", &attr.name)) {
+					muc_node->history_seconds = parse_int(attr.value.data, attr.value.end);
+				}
+			}
+		}
+	}
+}
+
+static BOOL fetch_muc_nodes(IncomingPacket *packet, MucNode *muc_node) {
+	BufferPtr buffer = packet->inner, node = buffer;
+	Buffer node_name;
+	XmlAttr attr;
+	int erase_index = 0;
+	char *node_start = 0;
+
+	memset(muc_node, 0, sizeof(*muc_node));
+	muc_node->history_max_chars = -1;
+	muc_node->history_max_stanzas = -1;
+
+	// First find the next free index of 'erase' block
+	for (; erase_index < MAX_ERASE_CHUNKS; ++erase_index) {
+		if (!packet->erase[erase_index].data) {
+			break;
+		}
+	}
+
+	for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS; node.data = buffer.data) {
+		node.end = buffer.data;
+		node_start = node.data;
+
+		xmlfsm_node_name(&node, &node_name);
+		if (BUF_EQ_LIT("x", &node_name)) {
+			if (!xmlfsm_skipto_attr(&node, "xmlns", &attr)) {
+				continue;
+			}
+
+			if (BPT_EQ_LIT("http://jabber.org/protocol/muc#user", &attr.value)) {
+				LDEBUG("found a muc#user node, setting erase");
+			} else if (BPT_EQ_LIT("http://jabber.org/protocol/muc", &attr.value)) {
+				if (xmlfsm_skip_attrs(&node)) {
+					parse_muc_node(&node, muc_node);
+				}
+			} else {
+				continue;
+			}
+
+			if (erase_index == MAX_ERASE_CHUNKS) {
+				LWARN("cannot allocate an erase chunk;"
+						" muc node is not removable, thus considering stanza as invalid");
+				return FALSE;
+			}
+			packet->erase[erase_index].data = node_start;
+			packet->erase[erase_index].end = node.end;
+			++erase_index;
+		}
+	}
+
+	return TRUE;
+}
+
 static void route_presence(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
@@ -814,8 +883,9 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	int affiliation;
 	BufferPtr new_nick;
 	BOOL just_joined = FALSE;
+	MucNode muc_node;
 
-	if (!erase_muc_user_node(ingress)) {
+	if (!fetch_muc_nodes(ingress, &muc_node)) {
 		return; // stanza is obviously not valid, just drop silently
 	}
 
@@ -871,8 +941,6 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 		}
 
 		// TODO(artem): check globally registered nickname
-		// TODO(artem): check password
-		// TODO(artem): load room history as requested
 
 		if (room->flags & MUC_FLAG_JUST_CREATED) {
 			room_affiliation_add(room, AFFIL_OWNER, AFFIL_OWNER, &ingress->real_from);
@@ -885,6 +953,13 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 			if (room->participants.size >= room->participants.max_size) {
 				router_error(chunk, &error_definitions[ERROR_OCCUPANTS_LIMIT]);
 				return;
+			}
+			if (room->flags & MUC_FLAG_PASSWORDPROTECTEDROOM) {
+				if (BPT_NULL(&muc_node.password) ||
+						!BPT_EQ_BIN(room->password.data, &muc_node.password, room->password.size)) {
+					router_error(chunk, &error_definitions[ERROR_PASSWORD]);
+					return;
+				}
 			}
 			affiliation = room_get_affiliation(room, chunk->acl, &ingress->real_from);
 			if (affiliation == AFFIL_OUTCAST) {
@@ -925,8 +1000,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	room_broadcast_presence(room, egress, &chunk->send, sender);
 
 	if (just_joined) {
-		// TODO(artem): parse maxchars and maxstanzas
-		room_history_send(room, chunk, room_history_first_item(room, -1, -1), sender);
+		room_history_send(room, chunk, room_history_first_item(room, &muc_node), sender);
 		room_subject_send(room, chunk, sender);
 	}
 
@@ -1036,7 +1110,8 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 	BufferPtr buffer, node, node_attr_value = BPT_INITIALIZER;
 	Buffer node_name;
 	XmlAttr node_attr;
-	int attr_state, admin_state;
+	int admin_state;
+	BOOL is_query_node_empty;
 
 	sender = room_participant_by_jid(room, &ingress->real_from);
 	if (!BPT_EMPTY(&ingress->proxy_to.resource)) {
@@ -1083,19 +1158,12 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 		node.end = buffer.data;
 		xmlfsm_node_name(&node, &node_name);
 
-		if (!BUF_EQ_LIT("query", &node_name)) {
-			continue;
-		}
-
-		while ((attr_state = xmlfsm_get_attr(&node, &node_attr)) == XMLPARSE_SUCCESS) {
-			if (BPT_EQ_LIT("xmlns", &node_attr.name)) {
+		if (BUF_EQ_LIT("query", &node_name)) {
+			if (xmlfsm_skipto_attr(&node, "xmlns", &node_attr)) {
 				node_attr_value = node_attr.value;
-				// found it, but must read all attributes to the end
+				is_query_node_empty = !xmlfsm_skip_attrs(&node);
+				break;
 			}
-		}
-
-		if (!BPT_EMPTY(&node_attr_value)) {
-			break;
 		}
 	}
 
@@ -1116,7 +1184,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			egress->iq_type = BUILD_IQ_ROOM_DISCO_ITEMS;
 			egress->room = room;
 		} else if (BPT_EQ_LIT("http://jabber.org/protocol/muc#admin", &node_attr_value)) {
-			if (attr_state == XMLNODE_EMPTY) {
+			if (is_query_node_empty) {
 				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
 				return;
 			}
@@ -1155,7 +1223,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 		}
 	} else if (ingress->type == 's') {
 		if (BPT_EQ_LIT("http://jabber.org/protocol/muc#admin", &node_attr_value)) {
-			if (attr_state == XMLNODE_EMPTY) {
+			if (is_query_node_empty) {
 				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
 				return;
 			}
@@ -1230,7 +1298,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			egress->iq_type = BUILD_IQ_ROOM_AFFILIATIONS;
 			egress->muc_items.items = 0;
 		} else if (BPT_EQ_LIT("http://jabber.org/protocol/muc#owner", &node_attr_value)) {
-			if (attr_state == XMLNODE_EMPTY) {
+			if (is_query_node_empty) {
 				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
 				return;
 			}

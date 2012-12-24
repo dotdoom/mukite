@@ -16,5 +16,7 @@ typedef struct {
 int xmlfsm_skip_node(BufferPtr *, int, BufferPtr *);
 int xmlfsm_node_name(BufferPtr *, Buffer *);
 int xmlfsm_get_attr(BufferPtr *, XmlAttr *);
+BOOL xmlfsm_skip_attrs(BufferPtr *);
+BOOL xmlfsm_skipto_attr(BufferPtr *, char *, XmlAttr *);
 
 #endif
