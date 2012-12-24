@@ -201,8 +201,9 @@ BOOL build_room_affiliations(BuilderBuffer *buffer, AffiliationEntry *aff, int a
 #define BUF_PUSH_FIELD(type, label, var, data, appendix) \
 	BUF_PUSH_LITERAL("<field type='" type "' label='" label "' var='" var "'><value>"); \
 	data; \
-	BUF_PUSH_LITERAL("</value></field>"); \
-	appendix;
+	BUF_PUSH_LITERAL("</value>"); \
+	appendix; \
+	BUF_PUSH_LITERAL("</field>");
 
 BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 	int chunk_size;
@@ -225,10 +226,10 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 			BUF_PUSH_BOOL(room->flags & MUC_FLAG_PUBLICROOM), );
 	BUF_PUSH_FIELD("boolean", "Make participants list public", "public_list",
 			BUF_PUSH_BOOL(room->flags & MUC_FLAG_PUBLICPARTICIPANTS), );
-	/*BUF_PUSH_FIELD("boolean", "Make room password protected", "muc#roomconfig_passwordprotectedroom",
+	BUF_PUSH_FIELD("boolean", "Make room password protected", "muc#roomconfig_passwordprotectedroom",
 			BUF_PUSH_BOOL(room->flags & MUC_FLAG_PASSWORDPROTECTEDROOM), );
 	BUF_PUSH_FIELD("text-private", "Password", "muc#roomconfig_roomsecret",
-			BUF_PUSH_BUF(room->password), );*/
+			BUF_PUSH_BUF(room->password), );
 	BUF_PUSH_FIELD("list-single", "Maximum Number of Occupants", "muc#roomconfig_maxusers",
 			BUF_PUSH_FMT("%d", room->participants.max_size),
 			BUF_PUSH_LITERAL(
@@ -242,7 +243,7 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 				"<option label='500'><value>500</value></option>"
 				"<option label='1000'><value>1000</value></option>"
 			));
-	BUF_PUSH_FIELD("boolean", "Present real Jabber IDs to", "muc#roomconfig_whois",
+	BUF_PUSH_FIELD("list-single", "Present real Jabber IDs to", "muc#roomconfig_whois",
 		if (room->flags & MUC_FLAG_SEMIANONYMOUS) {
 			BUF_PUSH_LITERAL("moderators");
 		} else {

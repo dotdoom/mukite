@@ -115,6 +115,8 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
 	}
 	DESERIALIZE_LIST(
 		room_deserialize(new_entry, input),
+
+		new_entry->next->prev = new_entry
 	);
 	rooms->last = new_entry;
 	rooms->size = entry_count;

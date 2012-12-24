@@ -139,11 +139,6 @@ int xmlfsm_node_name(BufferPtr *buffer, Buffer *name) {
 	}
 	name->size = buffer->data - name->data;
 
-	if (*buffer->data == '>') {
-		// Let xmlfsm_get_attr see the truth
-		--buffer->data;
-	}
-
 	return XMLPARSE_SUCCESS;
 }
 
@@ -162,6 +157,17 @@ BOOL xmlfsm_skipto_attr(BufferPtr *buffer, char *name, XmlAttr *attr) {
 		if (BPT_EQ_BIN(name, &attr->name, name_size)) {
 			return TRUE;
 		}
+	}
+	return FALSE;
+}
+
+BOOL xmlfsm_traverse_node(XmlNodeTraverser *data) {
+	data->node.data = data->buffer.data;
+	if (xmlfsm_skip_node(&data->buffer, 0, 0) == XMLPARSE_SUCCESS) {
+		data->node.end = data->buffer.data;
+		data->node_start = data->node.data;
+		xmlfsm_node_name(&data->node, &data->node_name);
+		return TRUE;
 	}
 	return FALSE;
 }
