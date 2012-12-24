@@ -179,10 +179,17 @@ static AffiliationEntry *room_affiliation_detach_clear(AffiliationEntry **list,
 	return affiliation;
 }
 
+static void room_participants_clear(Room *room) {
+	while (room->participants.first) {
+		room_leave(room, room->participants.first);
+	}
+}
+
 void room_destroy(Room *room) {
 	int i;
 
-	LASSERT(!room->participants.size, "Attempt to destroy a non-empty room!");
+	LDEBUG("destroying room '%.*s'", room->node.size, room->node.data);
+	room_participants_clear(room);
 	free(room->node.data);
 	free(room->title.data);
 	free(room->description.data);

@@ -93,6 +93,7 @@ void component_handle(RouterChunk *chunk) {
 				if (BUF_EQ_LIT("query", &node_name)) {
 					if (BPT_EQ_LIT("jabber:iq:version", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_VERSION;
+						egress->uname = &chunk->config->uname;
 					} else if (BPT_EQ_LIT("jabber:iq:last", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_LAST;
 						egress->iq_last.seconds = chunk->config->timer_thread.ticks / TIMER_RESOLUTION;

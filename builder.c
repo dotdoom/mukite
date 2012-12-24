@@ -74,7 +74,7 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 BOOL build_stats(BuilderBuffer *buffer, BuilderPacket *data) {
 	int chunk_size;
 
-	BUF_PUSH_STAT(rooms, count, "items");
+	BUF_PUSH_STAT(rooms, size, "items");
 	BUF_PUSH_STAT(queue, overflows, "times");
 	BUF_PUSH_STAT(queue, underflows, "times");
 	BUF_PUSH_STAT(queue, realloc_enlarges, "times");
@@ -150,7 +150,7 @@ BOOL build_room_info(BuilderBuffer *buffer, Room *room, Buffer *host) {
 
 BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 	int chunk_size;
-	Room *room = rooms->start;
+	Room *room = rooms->first;
 
 	LDEBUG("building component items (list of rooms)");
 
@@ -472,8 +472,13 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 							"<query xmlns='jabber:iq:version'>"
 								"<name>Mukite http://mukite.org/</name>"
 								"<version>git</version>"
-								"<os>Windows-XP 5.01.2600</os>"
-							"</query>");
+								"<os>");
+					BUF_PUSH_STR(packet->uname->sysname);
+					BUF_PUSH_LITERAL("/");
+					BUF_PUSH_STR(packet->uname->machine);
+					BUF_PUSH_LITERAL(" ");
+					BUF_PUSH_STR(packet->uname->version);
+					BUF_PUSH_LITERAL("</os></query>");
 					break;
 				case BUILD_IQ_LAST:
 					BUF_PUSH_LITERAL("<query xmlns='jabber:iq:last' seconds='");

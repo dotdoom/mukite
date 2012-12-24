@@ -23,14 +23,9 @@ static XMPPError error_definitions[] = {
 };
 
 void rooms_init(Rooms *rooms) {
-	rooms->start = rooms->end = 0;
-	rooms->count = 0;
+	rooms->first = rooms->last = 0;
+	rooms->size = 0;
 	pthread_rwlock_init(&rooms->sync, 0);
-}
-
-void rooms_destroy(Rooms *rooms) {
-	pthread_rwlock_destroy(&rooms->sync);
-	// TODO(artem): may want to clean all the rooms
 }
 
 Room *rooms_create_room(Rooms *rooms, Jid *jid) {
@@ -40,35 +35,42 @@ Room *rooms_create_room(Rooms *rooms, Jid *jid) {
 	LINFO("creating new room '%.*s'", JID_LEN(jid), JID_STR(jid));
 	room = malloc(sizeof(*room));
 	room_init(room, &jid->node);
-	if (rooms->end) {
-		rooms->end->next = room;
-		room->prev = rooms->end;
+	if (rooms->last) {
+		rooms->last->next = room;
+		room->prev = rooms->last;
 	} else {
-		rooms->start = room;
+		rooms->first = room;
 	}
-	rooms->end = room;
-	++rooms->count;
-	rooms_acquire(room);
+	rooms->last = room;
+	++rooms->size;
+	pthread_mutex_lock(&room->sync);
 	pthread_rwlock_unlock(&rooms->sync);
 
 	return room;
 }
 
-void rooms_destroy_room(Rooms *rooms, Room *room) {
+static void rooms_destroy_room(Rooms *rooms, Room *room) {
 	pthread_rwlock_wrlock(&rooms->sync);
 	if (room->prev) {
 		room->prev->next = room->next;
 	} else {
-		rooms->start = room->next;
+		rooms->first = room->next;
 	}
 	if (room->next) {
 		room->next->prev = room->prev;
 	} else {
-		rooms->end = room->prev;
+		rooms->last = room->prev;
 	}
-	--rooms->count;
+	--rooms->size;
 	room_destroy(room);
 	pthread_rwlock_unlock(&rooms->sync);
+}
+
+void rooms_destroy(Rooms *rooms) {
+	pthread_rwlock_destroy(&rooms->sync);
+	while (rooms->first) {
+		rooms_destroy_room(rooms, rooms->first);
+	}
 }
 
 BOOL registered_nicks_serialize(RegisteredNick *list, FILE *output) {
@@ -92,7 +94,7 @@ BOOL registered_nicks_deserialize(RegisteredNick **list, FILE *input, int limit)
 }
 
 BOOL rooms_serialize(Rooms *rooms, FILE *output) {
-	Room *list = rooms->start;
+	Room *list = rooms->first;
 	LDEBUG("serializing room list");
 	if (!registered_nicks_serialize(rooms->registered_nicks, output)) {
 		return FALSE;
@@ -106,7 +108,7 @@ BOOL rooms_serialize(Rooms *rooms, FILE *output) {
 BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
 	int entry_count = 0;
 	Room *new_entry = 0;
-	Room **list = &rooms->start;
+	Room **list = &rooms->first;
 	LDEBUG("deserializing room list");
 	if (!registered_nicks_deserialize(&rooms->registered_nicks, input, MAX_REGISTERED_NICKS)) {
 		return FALSE;
@@ -114,17 +116,9 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
 	DESERIALIZE_LIST(
 		room_deserialize(new_entry, input),
 	);
-	rooms->end = new_entry;
-	rooms->count = entry_count;
+	rooms->last = new_entry;
+	rooms->size = entry_count;
 	return TRUE;
-}
-
-void rooms_acquire(Room *room) {
-	pthread_mutex_lock(&room->sync);
-}
-
-void rooms_release(Room *room) {
-	pthread_mutex_unlock(&room->sync);
 }
 
 void rooms_route(RouterChunk *chunk) {
@@ -136,12 +130,12 @@ void rooms_route(RouterChunk *chunk) {
 	pthread_rwlock_rdlock(&rooms->sync);
 	LDEBUG("searching for the existing room '%.*s'",
 			JID_LEN(&ingress->proxy_to), JID_STR(&ingress->proxy_to));
-	for (room = rooms->start; room; room = room->next) {
+	for (room = rooms->first; room; room = room->next) {
 		if (!jid_strcmp(&ingress->proxy_to, &room->node, JID_NODE)) {
-			rooms_acquire(room);
+			pthread_mutex_lock(&room->sync);
 			if (room->flags & MUC_FLAG_DESTROYED) {
 				// This isn't the room you're looking for
-				rooms_release(room);
+				pthread_mutex_unlock(&room->sync);
 			} else {
 				break;
 			}
@@ -170,7 +164,7 @@ void rooms_route(RouterChunk *chunk) {
 
 	egress->from_node = room->node;
 	room_route(room, chunk);
-	rooms_release(room);
+	pthread_mutex_unlock(&room->sync);
 
 	if (room->flags & MUC_FLAG_DESTROYED) {
 		rooms_destroy_room(rooms, room);

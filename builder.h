@@ -1,6 +1,8 @@
 #ifndef BUILDER_H
 #define BUILDER_H
 
+#include <sys/utsname.h>
+
 #include "xmcomp/common.h"
 #include "xmcomp/queue.h"
 #include "xmcomp/ringbuffer.h"
@@ -83,6 +85,9 @@ typedef struct {
 			int affiliation;
 			AffiliationEntry *items;
 		} muc_items;
+
+		// iq_type = BUILD_IQ_VERSION
+		struct utsname *uname;
 	};
 } BuilderPacket;
 

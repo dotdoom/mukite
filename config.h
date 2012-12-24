@@ -1,6 +1,8 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#include <sys/utsname.h>
+
 #include "xmcomp/network.h"
 #include "xmcomp/reader.h"
 #include "xmcomp/writer.h"
@@ -64,6 +66,7 @@ typedef struct {
 
 	Rooms rooms;
 	ACLConfig acl_config;
+	struct utsname uname;
 } Config;
 
 void config_init(Config *, char *filename);

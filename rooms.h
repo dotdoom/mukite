@@ -16,8 +16,8 @@ typedef struct RegisteredNick {
 } RegisteredNick;
 
 typedef struct {
-	int count;
-	Room *start, *end;
+	int size;
+	Room *first, *last;
 	RegisteredNick *registered_nicks;
 	pthread_rwlock_t sync;
 } Rooms;
@@ -26,8 +26,6 @@ void rooms_init(Rooms *);
 void rooms_destroy(Rooms *);
 
 Room *rooms_create(Rooms *, Jid *);
-void rooms_acquire(Room *);
-void rooms_release(Room *);
 
 struct RouterChunk;
 void rooms_route(struct RouterChunk *);
