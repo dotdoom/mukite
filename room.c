@@ -270,7 +270,6 @@ ParticipantEntry *room_join(Room *room, Jid *jid, BufferPtr *nick, int affiliati
 		room->participants.first->prev = participant;
 	}
 	participant->next = room->participants.first;
-	participant->prev = 0;
 	room->participants.first = participant;
 
 	++room->participants.size;
@@ -285,10 +284,10 @@ ParticipantEntry *room_join(Room *room, Jid *jid, BufferPtr *nick, int affiliati
 }
 
 void room_leave(Room *room, ParticipantEntry *participant) {
-	if (room->participants.first == participant) {
-		room->participants.first = participant->next;
-	} else {
+	if (participant->prev) {
 		participant->prev->next = participant->next;
+	} else {
+		room->participants.first = participant->next;
 	}
 	if (participant->next) {
 		participant->next->prev = participant->prev;

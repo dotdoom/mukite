@@ -477,7 +477,7 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 					BUF_PUSH_LITERAL("/");
 					BUF_PUSH_STR(packet->uname->machine);
 					BUF_PUSH_LITERAL(" ");
-					BUF_PUSH_STR(packet->uname->version);
+					BUF_PUSH_STR(packet->uname->release);
 					BUF_PUSH_LITERAL("</os></query>");
 					break;
 				case BUILD_IQ_LAST:
