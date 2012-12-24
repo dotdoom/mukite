@@ -1,9 +1,12 @@
 # Mukite XMPP Component configuration file
-# Use: mukite <config
+# Use:
+# 	mukite <config.example
+# or
+# 	mukite config.example
 # to run mukite using this configuration.
 # Lines starting immediately with '#' are considered comments
 
-# Network settings.
+## Network settings.
 # TCP server (resolved with A record)
 network.host localhost
 # TCP port
@@ -15,41 +18,58 @@ component.hostname conference.localhost
 # A password for <handshake>
 component.password secret
 
-## Worker options.
+# Rooms storage file - for (de)serialization.
+# This file is overwritten by issuing signals SIGUSR1, SIGTERM or SIGQUIT.
 worker.data_file rooms.dat
+# Number of concurrent worker threads.
+# Range: 1-1024.
+# Restart required: NO.
 worker.threads 7
+# Output buffer for building stanzas. Should be large enough to hold at least 1 stanza.
+# Range: 1-INF.
+# Restart required: YES.
 worker.buffer 1048576
+# Minimum time interval between groupchat messages, 1/10 seconds.
+# Range: 0-INF.
+# Restart required: NO.
 worker.deciseconds_limit 2
 
-## Reader (executed inside of wrapper) config.
 # Queue size is the maximum number of stanzas being kept ready to be processed.
-# If you see queue.stats.overflows increasing, it could be reasonable to make this number larger.
-# Changing this option requires wrapper restart
+# If you see stats/queue/overflows increasing, consider making this number larger.
+# Range: 1-INF.
+# Restart required: YES.
 reader.queue 1024
-# A size of single stanza block. If 0, the buffer is always resized automatically. Although this
-# saves some memory, it can lead to memory fragmentation and excessive CPU usage.
-# If you set a number larger than zero, you should ensure it is large enough to keep a stanza (e.g. 65536 bytes).
+# A size of single stanza block. If 0, the buffer is always resized automatically.
+# Otherwise MUST be large enough to keep at least 1 incoming stanza.
 # Stanzas not matching the size are silently (in terms of XMPP) dropped and produce a warning.
-# When set to 0, see queue.stats.realloc_enlarges and realloc_shortens to have a view on how the things are going.
-# queue.stats.mallocs may be helpful to find out queue usage.
-# Changing this option does not require restart and the value will be grabbed for the next incoming stanza
+# Related stats:
+#   stats/queue/mallocs: highest number of the queue items used at a time;
+#   stats/queue/realloc_*: when .block = 0, indicates how often a realloc was performed;
+# Range: 0-INF.
+# Restart required: YES.
 reader.block 0
 # Network buffer size for the reader. This should be large enough to hold at least one stanza. If it does not,
 # it is enlargened to 1MB and a warning is issued. If 1MB is not enough, an error occurs and reader thread dies.
 # Too small values will affect performance on a high-loaded component and too high values affect memory.
-# Changing this option does not require restart and the value will be grabbed for the next incoming stanza
+# Range: 1-INF.
+# Restart required: NO.
 reader.buffer 1048576
 
-## Writer (executed inside of master) config.
-# A cyclic buffer size for the writer. Should be large enough to keep at least single output stanza.
-# Changing this option requires master restart.
-writer.buffer 1048576
+# Output ringbuffer size.
+# Related stats:
+# 	stats/ringbuffer/overflows: if you see this increasing, try increasing buffer size.
+# Range: 1-INF.
+# Restart required: NO.
+writer.buffer 2097152
 
 ## Access Control List
-# Default role name
+## 1 = create MUCs
+## 2 = owner in all MUCs
+## 3 = component admin
+# Default role index.
 acl.default_role 1
-# Data file
-acl.data_file acl.dat
+# Data file.
+acl.data_file acl.dat.example
 
 ## Logger config
 # Logging output filter. Log messages lower than this level will not be printed
