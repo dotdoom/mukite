@@ -8,21 +8,20 @@
 void ringbuffer_init(RingBuffer *ringbuffer, char *buffer, int size) {
 	RingBufferSync *sync = &ringbuffer->sync;
 
-	ringbuffer->start = ringbuffer->read_position = ringbuffer->write_position = buffer;
+	ringbuffer->start = buffer;
 	ringbuffer->buffer_size = size;
-	ringbuffer->data_size = 0;
 	ringbuffer->end = ringbuffer->start + ringbuffer->buffer_size;
+	ringbuffer_clear(ringbuffer);
 
 	pthread_mutex_init(&sync->ringbuffer_mutex, 0);
 	pthread_cond_init(&sync->data_available_cv, 0);
 	pthread_cond_init(&sync->free_available_cv, 0);
-
-	ringbuffer->online = TRUE;
 }
 
 void ringbuffer_clear(RingBuffer *ringbuffer) {
 	ringbuffer->read_position = ringbuffer->write_position = ringbuffer->start;
 	ringbuffer->data_size = 0;
+	ringbuffer->online = TRUE;
 }
 
 void ringbuffer_destroy(RingBuffer *ringbuffer) {

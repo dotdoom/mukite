@@ -124,6 +124,13 @@ BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
 	return TRUE;
 }
 
+#define BUF_PUSH_FEATURE(test, if_true, if_false) \
+	if (test) { \
+		BUF_PUSH_LITERAL("<feature var='" if_true "'/>"); \
+	} else { \
+		BUF_PUSH_LITERAL("<feature var='" if_false "'/>"); \
+	}
+
 BOOL build_room_info(BuilderBuffer *buffer, Room *room, Buffer *host) {
 	int chunk_size;
 
@@ -135,18 +142,13 @@ BOOL build_room_info(BuilderBuffer *buffer, Room *room, Buffer *host) {
 		BUF_PUSH_BUF(room->node);
 	}
 	BUF_PUSH_LITERAL("'/><feature var='http://jabber.org/protocol/muc'/>");
-	
-	// TODO(artem): build items depending on room flags
-	/*
-		"<feature var='muc_public'/>"
-		"<feature var='muc_persistent'/>"
-		"<feature var='muc_open'/>"
-		"<feature var='muc_semianonymous'/>"
-		"<feature var='muc_moderated'/>"
-		"<feature var='muc_unsecured'/>"
 
-		See: http://xmpp.org/extensions/xep-0045.html#registrar-features
-	*/
+	BUF_PUSH_FEATURE(room->flags & MUC_FLAG_PUBLICROOM, "muc_public", "muc_hidden");
+	BUF_PUSH_FEATURE(room->flags & MUC_FLAG_PERSISTENTROOM, "muc_persistent", "muc_temporary");
+	BUF_PUSH_FEATURE(room->flags & MUC_FLAG_MEMBERSONLY, "muc_membersonly", "muc_open");
+	BUF_PUSH_FEATURE(room->flags & MUC_FLAG_SEMIANONYMOUS, "muc_semianonymous", "muc_nonanonymous");
+	BUF_PUSH_FEATURE(room->flags & MUC_FLAG_MODERATEDROOM, "muc_moderated", "muc_unmoderated");
+	BUF_PUSH_FEATURE(room->flags & MUC_FLAG_PASSWORDPROTECTEDROOM, "muc_passwordprotected", "muc_unsecured");
 
 	return TRUE;
 }
@@ -159,18 +161,20 @@ BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 
 	pthread_rwlock_rdlock(&rooms->sync);
 	for (; room; room = room->next) {
-		BUF_PUSH_LITERAL("<item name='");
-		if (room->title.size) {
-			BUF_PUSH_BUF(room->title);
-		} else {
+		if (room->flags & MUC_FLAG_PUBLICROOM) {
+			BUF_PUSH_LITERAL("<item name='");
+			if (room->title.size) {
+				BUF_PUSH_BUF(room->title);
+			} else {
+				BUF_PUSH_BUF(room->node);
+			}
+			BUF_PUSH_FMT(" (%d)", room->participants.size);
+			BUF_PUSH_LITERAL("' jid='");
 			BUF_PUSH_BUF(room->node);
+			BUF_PUSH_LITERAL("@");
+			BUF_PUSH_BUF(*host);
+			BUF_PUSH_LITERAL("'/>");
 		}
-		BUF_PUSH_FMT(" (%d)", room->participants.size);
-		BUF_PUSH_LITERAL("' jid='");
-		BUF_PUSH_BUF(room->node);
-		BUF_PUSH_LITERAL("@");
-		BUF_PUSH_BUF(*host);
-		BUF_PUSH_LITERAL("'/>");
 	}
 	pthread_rwlock_unlock(&rooms->sync);
 
@@ -266,6 +270,8 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 			BUF_PUSH_BOOL(room->flags & MUC_FLAG_IQ_PROXY), );
 	BUF_PUSH_FIELD("boolean", "Allow users to send invites", "muc#roomconfig_allowinvites",
 			BUF_PUSH_BOOL(room->flags & MUC_FLAG_INVITES), );
+	BUF_PUSH_FIELD("boolean", "Allow visitors to send private messages",
+			"muc#roomconfig_allowvisitorspm", BUF_PUSH_BOOL(room->flags & MUC_FLAG_VISITORSPM), );
 	BUF_PUSH_FIELD("boolean", "Allow visitors to send status text in presence updates",
 			"muc#roomconfig_allowvisitorstatus", BUF_PUSH_BOOL(room->flags & MUC_FLAG_VISITORPRESENCE), );
 	BUF_PUSH_LITERAL("</x>");

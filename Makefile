@@ -1,7 +1,6 @@
-BARE_CFLAGS=-fPIC -g -Wall
+BARE_CFLAGS=-fPIC -O2 -Wall
 CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DLOG_POS -DLOG_PTHREAD -DLOG_CTIME
 LDFLAGS=-pthread
-UNAME=$(shell uname)
 
 EXECUTABLE=mukite
 
@@ -19,9 +18,6 @@ SOURCES=$(EXECUTABLE).c \
 OBJECTS=$(SOURCES:.c=.o)
 
 all: $(EXECUTABLE)
-
-run: $(EXECUTABLE)
-	./$(EXECUTABLE) config.example
 
 $(EXECUTABLE): $(OBJECTS) $(XMCOMP)
 

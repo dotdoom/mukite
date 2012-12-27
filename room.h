@@ -27,7 +27,7 @@ extern const int affiliation_name_sizes[];
 extern const char* role_names[];
 extern const int role_name_sizes[];
 
-#define USER_STRING_OPTION_LIMIT 4096
+#define USER_STRING_OPTION_LIMIT 8192
 #define PARTICIPANTS_LIMIT 1024
 #define AFFILIATION_LIST_LIMIT 4096
 #define REASONABLE_RAW_LIMIT (1 << 20)

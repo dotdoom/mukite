@@ -70,7 +70,7 @@ static XMPPError error_definitions[] = {
 		.code = "403",
 		.name = "forbidden",
 		.type = "cancel",
-		.text = "Visitors are not allowed to send messages to the public chat"
+		.text = "Visitors are not allowed to send messages to the public chat in a moderated room"
 	}, {
 #define ERROR_OCCUPANT_CONFLICT 4
 		.code = "",
@@ -734,7 +734,7 @@ static void route_message(Room *room, RouterChunk *chunk) {
 			return;
 		}
 
-		if (sender->role == ROLE_VISITOR && room->flags & MUC_FLAG_VISITORSPM) {
+		if (sender->role == ROLE_VISITOR && !(room->flags & MUC_FLAG_VISITORSPM)) {
 			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PM]);
 			return;
 		}
@@ -750,7 +750,7 @@ static void route_message(Room *room, RouterChunk *chunk) {
 		router_cleanup(ingress);
 		send_to_participants(chunk, receiver, 1);
 	} else if (ingress->type == 'g') {
-		if (sender->role < ROLE_PARTICIPANT) {
+		if (room->flags & MUC_FLAG_MODERATEDROOM && sender->role < ROLE_PARTICIPANT) {
 			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PUBLIC]);
 			return;
 		}
@@ -1095,23 +1095,29 @@ static void push_affected_participant(ParticipantEntry **first, ParticipantEntry
 	}
 }
 
-static BOOL room_config_option_set(Room *room, BufferPtr *var, BufferPtr *value) {
+static BOOL room_config_option_set(Room *room, BufferPtr *var, BufferPtr *value, int acl) {
 	LDEBUG("got room config option '%.*s' = '%.*s' (%d)",
 			BPT_SIZE(var), var->data,
 			BPT_SIZE(value), value->data,
 			btoi(value));
 
 	if (BPT_EQ_LIT("muc#roomconfig_roomname", var)) {
-		free(room->title.data);
-		buffer__ptr_cpy(&room->title, value);
+		if (BPT_SIZE(value) <= USER_STRING_OPTION_LIMIT) {
+			free(room->title.data);
+			buffer__ptr_cpy(&room->title, value);
+		}
 	} else if (BPT_EQ_LIT("muc#roomconfig_roomdesc", var)) {
-		free(room->description.data);
-		buffer__ptr_cpy(&room->description, value);
+		if (BPT_SIZE(value) <= USER_STRING_OPTION_LIMIT) {
+			free(room->description.data);
+			buffer__ptr_cpy(&room->description, value);
+		}
 	} else if (BPT_EQ_LIT("muc#roomconfig_persistentroom", var)) {
-		if (btoi(value)) {
-			room->flags |= MUC_FLAG_PERSISTENTROOM;
-		} else {
-			room->flags &= ~MUC_FLAG_PERSISTENTROOM;
+		if (acl >= ACL_MUC_PERSIST) {
+			if (btoi(value)) {
+				room->flags |= MUC_FLAG_PERSISTENTROOM;
+			} else {
+				room->flags &= ~MUC_FLAG_PERSISTENTROOM;
+			}
 		}
 	} else if (BPT_EQ_LIT("muc#roomconfig_publicroom", var)) {
 		if (btoi(value)) {
@@ -1126,10 +1132,12 @@ static BOOL room_config_option_set(Room *room, BufferPtr *var, BufferPtr *value)
 			room->flags &= ~MUC_FLAG_PUBLICPARTICIPANTS;
 		}
 	} else if (BPT_EQ_LIT("muc#roomconfig_passwordprotectedroom", var)) {
-		if (btoi(value)) {
-			room->flags |= MUC_FLAG_PASSWORDPROTECTEDROOM;
-		} else {
-			room->flags &= ~MUC_FLAG_PASSWORDPROTECTEDROOM;
+		if (BPT_SIZE(value) <= USER_STRING_OPTION_LIMIT) {
+			if (btoi(value)) {
+				room->flags |= MUC_FLAG_PASSWORDPROTECTEDROOM;
+			} else {
+				room->flags &= ~MUC_FLAG_PASSWORDPROTECTEDROOM;
+			}
 		}
 	} else if (BPT_EQ_LIT("muc#roomconfig_roomsecret", var)) {
 		free(room->password.data);
@@ -1184,6 +1192,12 @@ static BOOL room_config_option_set(Room *room, BufferPtr *var, BufferPtr *value)
 		} else {
 			room->flags &= ~MUC_FLAG_INVITES;
 		}
+	} else if (BPT_EQ_LIT("muc#roomconfig_allowvisitorspm", var)) {
+		if (btoi(value)) {
+			room->flags |= MUC_FLAG_VISITORSPM;
+		} else {
+			room->flags &= ~MUC_FLAG_VISITORSPM;
+		}
 	} else if (BPT_EQ_LIT("muc#roomconfig_allowvisitorstatus", var)) {
 		if (btoi(value)) {
 			room->flags |= MUC_FLAG_VISITORPRESENCE;
@@ -1194,7 +1208,7 @@ static BOOL room_config_option_set(Room *room, BufferPtr *var, BufferPtr *value)
 	return TRUE;
 }
 
-static BOOL room_config_parse(Room *room, BufferPtr *data) {
+static BOOL room_config_parse(Room *room, BufferPtr *data, int acl) {
 	XmlNodeTraverser field_nodes = { .buffer = *data }, value_nodes;
 	XmlAttr var;
 	while (xmlfsm_traverse_node(&field_nodes)) {
@@ -1210,7 +1224,7 @@ static BOOL room_config_parse(Room *room, BufferPtr *data) {
 				continue;
 			}
 			value_nodes.node.end -= sizeof("</value>") - 1;
-			if (!room_config_option_set(room, &var.value, &value_nodes.node)) {
+			if (!room_config_option_set(room, &var.value, &value_nodes.node, acl)) {
 				return FALSE;
 			}
 		}
@@ -1413,7 +1427,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 				return;
 			}
 
-			if  (!sender) {
+			if (!sender) {
 				router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
 				return;
 			}
@@ -1436,7 +1450,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 					egress->iq_type = BUILD_IQ_EMPTY;
 				} else if (BUF_EQ_LIT("x", &nodes.node_name)) {
 					if (xmlfsm_skip_attrs(&nodes.node)) {
-						if (!room_config_parse(room, &nodes.node)) {
+						if (!room_config_parse(room, &nodes.node, acl_role(&chunk->config->acl_config, &sender->jid))) {
 							router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
 							return;
 						}
@@ -1457,6 +1471,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 	}
 
 	if (egress->iq_type) {
+		// XXX(artem): use 'from' => '  to' substitution to avoid JID copying!
 		jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
 		router_cleanup(ingress);
 		SEND(&chunk->send);

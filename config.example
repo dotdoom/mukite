@@ -64,8 +64,9 @@ writer.buffer 2097152
 
 ## Access Control List
 ## 1 = create MUCs
-## 2 = owner in all MUCs
-## 3 = component admin
+## 2 = set 'persistent' flag of the owned room
+## 3 = owner in all MUCs
+## 4 = component admin
 # Default role index.
 acl.default_role 1
 # Data file.

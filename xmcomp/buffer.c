@@ -1,7 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 
 #include "buffer.h"
+#include "logger.h"
 
 BOOL buffer_serialize(Buffer *buffer, FILE *output) {
 	return fwrite(&buffer->size, sizeof(buffer->size), 1, output) &&
@@ -9,10 +11,14 @@ BOOL buffer_serialize(Buffer *buffer, FILE *output) {
 }
 
 BOOL buffer_deserialize(Buffer *buffer, FILE *input, int limit) {
+	int error;
 	if (!fread(&buffer->size, sizeof(buffer->size), 1, input)) {
+		error = errno;
+		LERRNO("fread() failed", error);
 		return FALSE;
 	}
 	if (buffer->size < 0 || buffer->size > limit) {
+		LERROR("buffer size = %d (limit %d)", buffer->size, limit);
 		return FALSE;
 	}
 	if (!buffer->size) {

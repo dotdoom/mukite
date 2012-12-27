@@ -131,7 +131,7 @@ int jid_strcmp(Jid *jid, Buffer *str, int part) {
 }
 
 void jid_cpy(Jid *dst, Jid *src, int parts) {
-	int size = 0, node_size, host_size, resource_size;
+	int size = 0, node_size = 0, host_size, resource_size;
 	char *mem = 0;
 
 	// Assume it's nonsence to have a copy of jid w/o hostname
