@@ -14,6 +14,7 @@ void *timer_thread_entry(void *void_timer_config) {
 	int i;
 
 	sighelper_sigblockall(0);
+	time(&config->start);
 	config->ticks = 0;
 
 	while (1) {

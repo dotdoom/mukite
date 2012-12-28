@@ -55,10 +55,8 @@ void router_cleanup(IncomingPacket *packet) {
 void component_handle(RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
-	BufferPtr buffer = ingress->inner, node = buffer;
-	Buffer node_name;
 	XmlAttr xmlns_attr;
-	BOOL xmlns_found;
+	XmlNodeTraverser nodes = { .buffer = ingress->inner };
 
 	if (ingress->name != 'i') {
 		// We do not handle <message> or <presence> to the nodeless JID
@@ -72,25 +70,13 @@ void component_handle(RouterChunk *chunk) {
 
 	switch (ingress->type) {
 		case 'g':
-			for (; xmlfsm_skip_node(&buffer, 0, 0) == XMLPARSE_SUCCESS;
-					node.data = buffer.data) {
-				node.end = buffer.data;
-				xmlfsm_node_name(&node, &node_name);
-
-				xmlns_found = FALSE;
-				while (xmlfsm_get_attr(&node, &xmlns_attr) == XMLPARSE_SUCCESS) {
-					if (BPT_EQ_LIT("xmlns", &xmlns_attr.name)) {
-						xmlns_found = TRUE;
-						break;
-					}
-				}
-
-				if (!xmlns_found) {
-					// no use of <query> without xmlns="..."
+			while (xmlfsm_traverse_node(&nodes)) {
+				if (!xmlfsm_skipto_attr(&nodes.node, "xmlns", &xmlns_attr)) {
 					continue;
 				}
+				xmlfsm_skip_attrs(&nodes.node);
 
-				if (BUF_EQ_LIT("query", &node_name)) {
+				if (BUF_EQ_LIT("query", &nodes.node_name)) {
 					if (BPT_EQ_LIT("jabber:iq:version", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_VERSION;
 						egress->uname = &chunk->config->uname;
@@ -99,7 +85,7 @@ void component_handle(RouterChunk *chunk) {
 						egress->iq_last.seconds = chunk->config->timer_thread.ticks / TIMER_RESOLUTION;
 					} else if (BPT_EQ_LIT("http://jabber.org/protocol/stats", &xmlns_attr.value)) {
 						egress->iq_type = BUILD_IQ_STATS;
-						egress->iq_stats.request = node;
+						egress->iq_stats.request = nodes.node;
 						egress->iq_stats.rooms = &chunk->config->rooms;
 						egress->iq_stats.ringbuffer = &chunk->config->writer_thread.ringbuffer.stats;
 						egress->iq_stats.queue = &chunk->config->reader_thread.queue.stats;
@@ -111,7 +97,7 @@ void component_handle(RouterChunk *chunk) {
 					}
 				}
 
-				if (BUF_EQ_LIT("time", &node_name) &&
+				if (BUF_EQ_LIT("time", &nodes.node_name) &&
 					BPT_EQ_LIT("urn:xmpp:time", &xmlns_attr.value)) {
 					egress->iq_type = BUILD_IQ_TIME;
 				}

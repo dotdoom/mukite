@@ -90,7 +90,6 @@ void config_init(Config *config, char *filename) {
 	config->worker.threads = 3;
 	config->worker.buffer = 1 << 20;
 	config->worker.deciseconds_limit = 2;
-	time(&config->timer_thread.start);
 	rooms_init(&config->rooms);
 	uname(&config->uname);
 }
