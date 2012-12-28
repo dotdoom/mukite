@@ -23,7 +23,7 @@ typedef struct {
 typedef struct {
 	char code[4];
 	char type[10];
-	char name[20];
+	char name[25];
 	char text[200];
 } XMPPError;
 

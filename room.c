@@ -143,6 +143,12 @@ static XMPPError error_definitions[] = {
 		.name = "forbidden",
 		.type = "cancel",
 		.text = "Private messages are not allowed in this room"
+	}, {
+#define ERROR_NOT_IMPLEMENTED 16
+		.code = "501",
+		.name = "feature-not-implemented",
+		.type = "cancel",
+		.text = "This service does not provide the requested feature"
 	}
 };
 
@@ -1305,8 +1311,13 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			egress->iq_type = BUILD_IQ_ROOM_DISCO_INFO;
 			egress->room = room;
 		} else if (BPT_EQ_LIT("http://jabber.org/protocol/disco#items", &xmlns)) {
-			egress->iq_type = BUILD_IQ_ROOM_DISCO_ITEMS;
-			egress->room = room;
+			if (room->flags & MUC_FLAG_PUBLICPARTICIPANTS) {
+				egress->iq_type = BUILD_IQ_ROOM_DISCO_ITEMS;
+				egress->room = room;
+			} else {
+				router_error(chunk, &error_definitions[ERROR_NOT_IMPLEMENTED]);
+				return;
+			}
 		} else if (BPT_EQ_LIT("http://jabber.org/protocol/muc#admin", &xmlns)) {
 			if (is_query_node_empty) {
 				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);

@@ -141,8 +141,12 @@ BOOL build_room_info(BuilderBuffer *buffer, Room *room, Buffer *host) {
 	} else {
 		BUF_PUSH_BUF(room->node);
 	}
-	BUF_PUSH_LITERAL("'/><feature var='http://jabber.org/protocol/muc'/>");
-
+	BUF_PUSH_LITERAL("'/>"
+			"<feature var='http://jabber.org/protocol/muc'/>"
+			"<feature var='http://jabber.org/protocol/disco#info'/>");
+	if (room->flags & MUC_FLAG_PUBLICPARTICIPANTS) {
+		BUF_PUSH_LITERAL("<feature var='http://jabber.org/protocol/disco#items'/>");
+	}
 	BUF_PUSH_FEATURE(room->flags & MUC_FLAG_PUBLICROOM, "muc_public", "muc_hidden");
 	BUF_PUSH_FEATURE(room->flags & MUC_FLAG_PERSISTENTROOM, "muc_persistent", "muc_temporary");
 	BUF_PUSH_FEATURE(room->flags & MUC_FLAG_MEMBERSONLY, "muc_membersonly", "muc_open");
@@ -168,7 +172,9 @@ BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 			} else {
 				BUF_PUSH_BUF(room->node);
 			}
-			BUF_PUSH_FMT(" (%d)", room->participants.size);
+			if (room->flags & MUC_FLAG_PUBLICPARTICIPANTS) {
+				BUF_PUSH_FMT(" (%d)", room->participants.size);
+			}
 			BUF_PUSH_LITERAL("' jid='");
 			BUF_PUSH_BUF(room->node);
 			BUF_PUSH_LITERAL("@");
@@ -461,7 +467,7 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 								"<feature var='http://jabber.org/protocol/disco#info'/>"
 								"<feature var='http://jabber.org/protocol/disco#items'/>"
 								"<feature var='http://jabber.org/protocol/muc'/>"
-								"<feature var='jabber:iq:register'/>"
+								//"<feature var='jabber:iq:register'/>"
 								"<feature var='jabber:iq:last'/>"
 								"<feature var='jabber:iq:version'/>"
 								"<feature var='urn:xmpp:time'/>");
