@@ -19,7 +19,7 @@ void *timer_thread_entry(void *void_timer_config) {
 
 	while (1) {
 		time(&pivot_time);
-		config->ticks = difftime(pivot_time, config->start) * 10;
+		config->ticks = difftime(pivot_time, config->start) * TIMER_RESOLUTION;
 		for (i = 0; i < TIMER_SYNC; ++i) {
 			nanosleep(&rqtp, 0);
 			++config->ticks;

@@ -1484,6 +1484,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 
 	if (egress->iq_type) {
 		// XXX(artem): use 'from' => '  to' substitution to avoid JID copying!
+		// TODO(artem): optimization note: use sender->jid when available
 		jid_cpy(&egress->to, &ingress->real_from, JID_FULL);
 		router_cleanup(ingress);
 		SEND(&chunk->send);
@@ -1527,6 +1528,20 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 }
 
 void room_route(Room *room, RouterChunk *chunk) {
+	ParticipantEntry *sender;
+	if (chunk->ingress.type == 'e' && chunk->ingress.name != 'i') {
+		// <message> or <presence> with type='error'
+		if ((sender = room_participant_by_jid(room, &chunk->ingress.real_from))) {
+			BPT_SET_LIT(&chunk->egress.user_data,
+					"<status>This occupant is kicked from the room because he sent an error stanza</status>");
+			chunk->egress.type = 'u';
+			sender->role = ROLE_NONE;
+			router_cleanup(&chunk->ingress);
+			room_broadcast_presence(room, &chunk->egress, &chunk->send, sender);
+			room_leave(room, sender);
+		}
+		return;
+	}
 	switch (chunk->ingress.name) {
 		case 'm':
 			route_message(room, chunk);

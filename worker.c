@@ -17,9 +17,8 @@
 inline BOOL set_type(BufferPtr *value, IncomingPacket *packet) {
 	int value_size = BPT_SIZE(value);
 	if (BPT_EQ_LIT("error", value)) {
-		// TODO(artem): route errors, drop participant from the room in some cases
-		LDEBUG("not handling yet: stanza type error");
-		return FALSE;
+		packet->type = 'e';
+		return TRUE;
 	}
 
 	switch (packet->name) {
@@ -132,7 +131,7 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 			LDEBUG("dropping: presence without nickname");
 			return FALSE;
 		}
-		if (packet->name == 'm' &&
+		if (packet->name == 'm' && packet->type != 'e' &&
 				(BPT_BLANK(&packet->proxy_to.resource) == (packet->type == 'c'))) {
 			// The nickname (resource) is specified and type is not c(hat) - thus g(roupchat)
 			LDEBUG("dropping: wrong message type");

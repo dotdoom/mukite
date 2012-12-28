@@ -146,6 +146,9 @@ void rooms_route(RouterChunk *chunk) {
 	pthread_rwlock_unlock(&rooms->sync);
 
 	if (!room) {
+		if (ingress->type == 'e') {
+			return;
+		}
 		if (ingress->name != 'p' || ingress->type == 'u') {
 			// this is not a presence, or presence type is 'unavailable'
 			router_error(chunk, &error_definitions[ERROR_ROOM_NOT_FOUND]);

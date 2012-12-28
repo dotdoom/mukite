@@ -38,6 +38,8 @@ typedef struct {
 #define BPT_EQ_LIT(literal, bptr) \
 	(sizeof(literal)-1 == BPT_SIZE(bptr) && \
 	 !memcmp((literal), (bptr)->data, sizeof(literal)-1))
+#define BPT_SET_LIT(bptr, literal) \
+	{ (bptr)->data = literal; (bptr)->end = (bptr)->data + sizeof(literal) - 1; }
 #define BPT_2_BUF(bptr) \
 	{ .data = (bptr)->data, .size = BPT_SIZE(bptr) }
 #define BPT_INITIALIZER { .data = 0, .end = 0 }
