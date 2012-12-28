@@ -1494,18 +1494,19 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			current_affected_participant; ) {
 		current_affected_participant->muc_admin_affected = FALSE;
 		egress->participant.status_codes_count = 0;
+		egress->type = '\0';
 		if (room->flags & MUC_FLAG_DESTROYED) {
 			egress->type = 'u';
-		} else {
-			if (current_affected_participant->affiliation == AFFIL_OUTCAST) {
-				builder_push_status_code(&egress->participant, STATUS_BANNED);
-				egress->type = 'u';
-			} else if (current_affected_participant->role == ROLE_NONE) {
-				builder_push_status_code(&egress->participant, STATUS_KICKED);
-				egress->type = 'u';
-			} else {
-				egress->type = '\0';
-			}
+		} else if (current_affected_participant->affiliation == AFFIL_OUTCAST) {
+			builder_push_status_code(&egress->participant, STATUS_BANNED);
+			egress->type = 'u';
+		} else if (room->flags & MUC_FLAG_MEMBERSONLY &&
+				current_affected_participant->affiliation < AFFIL_MEMBER) {
+			builder_push_status_code(&egress->participant, STATUS_NONMEMBER_REMOVED);
+			egress->type = 'u';
+		} else if (current_affected_participant->role == ROLE_NONE) {
+			builder_push_status_code(&egress->participant, STATUS_KICKED);
+			egress->type = 'u';
 		}
 
 		if (egress->type == 'u') {
