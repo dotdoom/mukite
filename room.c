@@ -1450,7 +1450,6 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			nodes.buffer = nodes.node;
 			if (xmlfsm_traverse_node(&nodes)) {
 				if (BUF_EQ_LIT("destroy", &nodes.node_name)) {
-					// TODO(artem): save destruction reason
 					room->flags |= MUC_FLAG_DESTROYED;
 					for (receiver = room->participants.first; receiver; receiver = receiver->next) {
 						receiver->role = ROLE_NONE;
@@ -1458,6 +1457,8 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 						push_affected_participant(&first_affected_participant,
 								&current_affected_participant, receiver);
 					}
+					egress->participant.destroy_node.data = nodes.node_start;
+					egress->participant.destroy_node.end = nodes.node.end;
 					egress->iq_type = BUILD_IQ_EMPTY;
 				} else if (BUF_EQ_LIT("x", &nodes.node_name)) {
 					if (xmlfsm_skip_attrs(&nodes.node)) {
@@ -1489,7 +1490,6 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 		jid_destroy(&egress->to);
 	}
 
-	// TODO(artem): add the destruction initiator and reason (if needed)
 	for (current_affected_participant = first_affected_participant;
 			current_affected_participant; ) {
 		current_affected_participant->muc_admin_affected = FALSE;

@@ -18,6 +18,7 @@ typedef struct {
 	BufferPtr nick;
 	int status_codes[MAX_STATUS_CODES];
 	int status_codes_count;
+	BufferPtr destroy_node;
 } MucAdmNode;
 
 typedef struct {

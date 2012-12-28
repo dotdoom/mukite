@@ -65,7 +65,9 @@ BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
 		BUF_PUSH_FMT("%d", code);
 	}
 
-	BUF_PUSH_LITERAL("'/></x>");
+	BUF_PUSH_LITERAL("'/>");
+	BUF_PUSH_IFBPT(node->destroy_node);
+	BUF_PUSH_LITERAL("</x>");
 	return TRUE;
 }
 
