@@ -166,22 +166,22 @@ void room_init(Room *room, BufferPtr *node) {
 	room->default_role = ROLE_PARTICIPANT;
 }
 
-void room_history_shift(Room *room) {
+void history_shift(struct HistoryList *history) {
 	HistoryEntry *removee = 0;
-	if (room->history.first) {
-		removee = room->history.first;
+	if (history->first) {
+		removee = history->first;
 		if (removee->next) {
 			removee->next->prev = 0;
 		} else {
-			room->history.last = 0;
+			history->last = 0;
 		}
-		room->history.first = removee->next;
+		history->first = removee->next;
 
 		free(removee->nick.data);
 		free(removee->header.data);
 		free(removee->inner.data);
 		free(removee);
-		--room->history.size;
+		--history->size;
 	}
 }
 
@@ -220,7 +220,7 @@ void room_destroy(Room *room) {
 		}
 	}
 	while (room->history.size) {
-		room_history_shift(room);
+		history_shift(&room->history);
 	}
 	pthread_mutex_destroy(&room->sync);
 }
@@ -564,7 +564,7 @@ static BOOL get_subject_node(BufferPtr *packet, BufferPtr *subject) {
 	return FALSE;
 }
 
-void send_to_participants(RouterChunk *chunk, ParticipantEntry *participant, int limit) {
+static void send_to_participants(RouterChunk *chunk, ParticipantEntry *participant, int limit) {
 	int sent = 0;
 	for (; participant && sent < limit; participant = participant->next, ++sent) {
 		LDEBUG("routing stanza to '%.*s', real JID '%.*s'",
@@ -591,7 +591,7 @@ BOOL room_attach_config_status_codes(Room *room, MucAdmNode *participant) {
 	return TRUE;
 }
 
-BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallback *send, ParticipantEntry *sender) {
+static BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallback *send, ParticipantEntry *sender) {
 	int orig_status_codes_count = egress->participant.status_codes_count;
 	ParticipantEntry *receiver = room->participants.first;
 
@@ -621,72 +621,72 @@ BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallback *se
 	return TRUE;
 }
 
-void room_history_push(Room *room, RouterChunk *chunk, ParticipantEntry *sender) {
+static void history_push(struct HistoryList *history, RouterChunk *chunk, BufferPtr *nick) {
 	HistoryEntry *new_item = 0;
 
-	while (room->history.size &&
-			room->history.size >= room->history.max_size) {
-		room_history_shift(room);
+	while (history->size &&
+			history->size >= history->max_size) {
+		history_shift(history);
 	}
 
-	if (room->history.max_size <= 0) {
+	if (history->max_size <= 0) {
 		return;
 	}
 
 	new_item = malloc(sizeof(*new_item));
 	memset(new_item, 0, sizeof(*new_item));
-	buffer_ptr_cpy(&new_item->nick, &sender->nick);
+	buffer_ptr_cpy(&new_item->nick, nick);
 	buffer_ptr_cpy(&new_item->header, &chunk->ingress.header);
 	buffer_ptr_cpy(&new_item->inner, &chunk->ingress.inner);
 	new_item->delay = chunk->config->timer_thread.start +
 		chunk->config->timer_thread.ticks / TIMER_RESOLUTION;
 
-	if (room->history.first) {
-		room->history.last->next = new_item;
-		new_item->prev = room->history.last;
-		room->history.last = new_item;
-		++room->history.size;
+	if (history->first) {
+		history->last->next = new_item;
+		new_item->prev = history->last;
+		history->last = new_item;
+		++history->size;
 	} else {
-		room->history.first = room->history.last = new_item;
-		room->history.size = 1;
+		history->first = history->last = new_item;
+		history->size = 1;
 	}
 }
 
 typedef struct {
-	int history_max_stanzas,
-		history_max_chars,
-		history_seconds;
+	struct {
+		int max_stanzas,
+			max_chars,
+			seconds;
+	} history;
 	BufferPtr password;
 } MucNode;
 
-
-static HistoryEntry *room_history_first_item(Room *room, MucNode *muc_node) {
+static HistoryEntry *history_first_item(struct HistoryList *history, MucNode *muc_node) {
 	HistoryEntry *first_item = 0;
 	time_t now;
-	if (muc_node->history_max_chars < 0 && muc_node->history_max_stanzas < 0 &&
-			muc_node->history_seconds < 0) {
+	if (muc_node->history.max_chars < 0 && muc_node->history.max_stanzas < 0 &&
+			muc_node->history.seconds < 0) {
 		// shortcut
-		return room->history.first;
+		return history->first;
 	}
 
 	time(&now);
-	for (first_item = room->history.last; first_item; first_item = first_item->prev) {
+	for (first_item = history->last; first_item; first_item = first_item->prev) {
 		if (
-				(muc_node->history_max_chars >= 0 &&
-				 (muc_node->history_max_chars -= BPT_SIZE(&first_item->inner)) < 0) ||
-				(muc_node->history_max_stanzas >= 0 &&
-				 !muc_node->history_max_stanzas--) ||
-				(muc_node->history_seconds >= 0 &&
-				 muc_node->history_seconds < difftime(now, first_item->delay))
+				(muc_node->history.max_chars >= 0 &&
+				 (muc_node->history.max_chars -= BPT_SIZE(&first_item->inner)) < 0) ||
+				(muc_node->history.max_stanzas >= 0 &&
+				 !muc_node->history.max_stanzas--) ||
+				(muc_node->history.seconds >= 0 &&
+				 muc_node->history.seconds < difftime(now, first_item->delay))
 		   ) {
 			return first_item->next;
 		}
 	}
-	return room->history.first;
+	return history->first;
 }
 
-static void room_history_send(Room *room, RouterChunk *chunk, HistoryEntry *history,
-		ParticipantEntry *receiver) {
+static void history_send(HistoryEntry *history, RouterChunk *chunk, ParticipantEntry *receiver) {
 	BuilderPacket *egress = &chunk->egress;
 
 	egress->name = 'm';
@@ -793,7 +793,7 @@ static void route_message(Room *room, RouterChunk *chunk) {
 		}
 
 		router_cleanup(ingress);
-		room_history_push(room, chunk, sender);
+		history_push(&room->history, chunk, &sender->nick);
 		send_to_participants(chunk, room->participants.first, 1 << 30);
 	}
 }
@@ -822,11 +822,11 @@ static void parse_muc_node(BufferPtr *buffer, MucNode *muc_node) {
 		} else if (BUF_EQ_LIT("history", &nodes.node_name)) {
 			while (xmlfsm_get_attr(&nodes.node, &attr) == XMLPARSE_SUCCESS) {
 				if (BPT_EQ_LIT("maxstanzas", &attr.name)) {
-					muc_node->history_max_stanzas = btoi(&attr.value);
+					muc_node->history.max_stanzas = btoi(&attr.value);
 				} else if (BPT_EQ_LIT("maxchars", &attr.name)) {
-					muc_node->history_max_chars = btoi(&attr.value);
+					muc_node->history.max_chars = btoi(&attr.value);
 				} else if (BPT_EQ_LIT("seconds", &attr.name)) {
-					muc_node->history_seconds = btoi(&attr.value);
+					muc_node->history.seconds = btoi(&attr.value);
 				}
 			}
 		}
@@ -839,9 +839,9 @@ static BOOL fetch_muc_nodes(IncomingPacket *packet, MucNode *muc_node) {
 	int erase_index = 0;
 
 	memset(muc_node, 0, sizeof(*muc_node));
-	muc_node->history_max_chars = -1;
-	muc_node->history_max_stanzas = -1;
-	muc_node->history_seconds = -1;
+	muc_node->history.max_chars =
+		muc_node->history.max_stanzas =
+		muc_node->history.seconds = -1;
 
 	// First find the next free index of 'erase' block
 	for (; erase_index < MAX_ERASE_CHUNKS; ++erase_index) {
@@ -1005,7 +1005,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	room_broadcast_presence(room, egress, &chunk->send, sender);
 
 	if (just_joined) {
-		room_history_send(room, chunk, room_history_first_item(room, &muc_node), sender);
+		history_send(history_first_item(&room->history, &muc_node), chunk, sender);
 		room_subject_send(room, chunk, sender);
 	}
 
