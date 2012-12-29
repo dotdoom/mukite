@@ -149,6 +149,12 @@ static XMPPError error_definitions[] = {
 		.name = "feature-not-implemented",
 		.type = "cancel",
 		.text = "This service does not provide the requested feature"
+	}, {
+#define ERROR_JID_MALFORMED 17
+		.code = "400",
+		.name = "jid-malformed",
+		.type = "modify",
+		.text = "You should specify a room nickname"
 	}
 };
 
@@ -344,7 +350,7 @@ ParticipantEntry *room_participant_by_jid(Room *room, Jid *jid) {
 	ParticipantEntry *current = room->participants.first;
 	int mode = JID_FULL;
 
-	if (BPT_EMPTY(&jid->resource)) {
+	if (BPT_NULL(&jid->resource)) {
 		// it is possible that <iq> (e.g. vCard) come with no resource.
 		// We should still be able to find that participant.
 		mode = JID_NODE | JID_HOST;
@@ -902,7 +908,8 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 		}
 
 		// Sender is already a participant
-		if ((receiver = room_participant_by_nick(room, &ingress->proxy_to.resource)) != sender) {
+		if (!BPT_NULL(&ingress->proxy_to.resource) &&
+				(receiver = room_participant_by_nick(room, &ingress->proxy_to.resource)) != sender) {
 			// Participant wants to change a nickname
 			if (receiver) {
 				router_error(chunk, &error_definitions[ERROR_OCCUPANT_CONFLICT]);
@@ -936,6 +943,11 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 		// Participant not in room, but wants to join
 		if (ingress->type == 'u') {
 			// There's no use in 'unavailable' presence for the not-in-room user
+			return;
+		}
+		
+		if (BPT_NULL(&ingress->proxy_to.resource)) {
+			router_error(chunk, &error_definitions[ERROR_JID_MALFORMED]);
 			return;
 		}
 
@@ -1252,7 +1264,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 	BOOL is_query_node_empty;
 
 	sender = room_participant_by_jid(room, &ingress->real_from);
-	if (!BPT_EMPTY(&ingress->proxy_to.resource)) {
+	if (!BPT_NULL(&ingress->proxy_to.resource)) {
 		// iq directed to participant - just proxying
 		if (!sender) {
 			router_error(chunk, &error_definitions[ERROR_EXTERNAL_IQ]);
@@ -1300,7 +1312,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 		}
 	}
 
-	if (BPT_EMPTY(&xmlns)) {
+	if (BPT_NULL(&xmlns)) {
 		router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
 		return;
 	}

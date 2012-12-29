@@ -126,11 +126,6 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 			LDEBUG("dropping: message/presence without node name");
 			return FALSE;
 		}
-		if (packet->name == 'p' && BPT_BLANK(&packet->proxy_to.resource)) {
-			// Presence should contain nickname as resource
-			LDEBUG("dropping: presence without nickname");
-			return FALSE;
-		}
 		if (packet->name == 'm' && packet->type != 'e' &&
 				(BPT_BLANK(&packet->proxy_to.resource) == (packet->type == 'c'))) {
 			// The nickname (resource) is specified and type is not c(hat) - thus g(roupchat)
