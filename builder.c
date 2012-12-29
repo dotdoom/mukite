@@ -411,7 +411,7 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 
 	BUF_PUSH_IFBPT(packet->user_data);
 
-	if (packet->type == 'e') {
+	if (packet->type == 'e' && packet->error) {
 		if (!build_error(packet->error, buffer)) {
 			return FALSE;
 		}
