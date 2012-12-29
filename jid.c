@@ -95,7 +95,7 @@ int jid_cmp(Jid *jid1, Jid *jid2, int mode) {
 			return 1;
 		}
 
-		if (strncasecmp(jid1->resource.data, jid2->resource.data, size)) {
+		if (memcmp(jid1->resource.data, jid2->resource.data, size)) {
 			return 1;
 		}
 	}
