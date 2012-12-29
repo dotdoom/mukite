@@ -95,17 +95,17 @@ void component_handle(RouterChunk *chunk) {
 						egress->rooms = &chunk->config->rooms;
 						egress->iq_type = BUILD_IQ_DISCO_ITEMS;
 					}
-				}
-
-				if (BUF_EQ_LIT("time", &nodes.node_name) &&
+				} else if (BUF_EQ_LIT("time", &nodes.node_name) &&
 					BPT_EQ_LIT("urn:xmpp:time", &xmlns_attr.value)) {
 					egress->iq_type = BUILD_IQ_TIME;
+				} else if (BUF_EQ_LIT("vCard", &nodes.node_name)) {
+					egress->iq_type = BUILD_IQ_VCARD;
 				}
 
 				if (egress->iq_type) {
 					chunk->send.proc(chunk->send.data);
 					break;
-				}
+				} // TODO(artem): else send feature-not-implemented
 			}
 			break;
 	}

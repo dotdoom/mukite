@@ -504,6 +504,9 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 					}
 					BUF_PUSH_LITERAL("</query>");
 					break;
+				case BUILD_IQ_VCARD:
+					BUF_PUSH_LITERAL("<vCard xmlns='vcard-temp'><FN>MewCate Jabber Bot</FN></vCard>");
+					break;
 			}
 		}
 	}
