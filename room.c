@@ -1448,7 +1448,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			}
 
 			nodes.buffer = nodes.node;
-			if (xmlfsm_traverse_node(&nodes)) {
+			while (xmlfsm_traverse_node(&nodes)) {
 				if (BUF_EQ_LIT("destroy", &nodes.node_name)) {
 					room->flags |= MUC_FLAG_DESTROYED;
 					for (receiver = room->participants.first; receiver; receiver = receiver->next) {
@@ -1460,6 +1460,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 					egress->participant.destroy_node.data = nodes.node_start;
 					egress->participant.destroy_node.end = nodes.node.end;
 					egress->iq_type = BUILD_IQ_EMPTY;
+					break;
 				} else if (BUF_EQ_LIT("x", &nodes.node_name)) {
 					if (xmlfsm_skip_attrs(&nodes.node)) {
 						if (!room_config_parse(room, &nodes.node, acl_role(&chunk->config->acl_config, &sender->jid))) {
@@ -1477,6 +1478,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 						}
 					}
 					egress->iq_type = BUILD_IQ_EMPTY;
+					break;
 				}
 			}
 		}
@@ -1489,6 +1491,9 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 		router_cleanup(ingress);
 		SEND(&chunk->send);
 		jid_destroy(&egress->to);
+	} else {
+		router_error(chunk, &error_definitions[ERROR_NOT_IMPLEMENTED]);
+		return;
 	}
 
 	for (current_affected_participant = first_affected_participant;
