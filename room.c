@@ -740,28 +740,7 @@ static void route_message(Room *room, RouterChunk *chunk) {
 
 	egress->from_nick = sender->nick;
 	egress->user_data = ingress->inner;
-	if (ingress->type == 'c') {
-		if (!(receiver = room_participant_by_nick(room, &ingress->proxy_to.resource))) {
-			router_error(chunk, &error_definitions[ERROR_RECIPIENT_NOT_IN_ROOM]);
-			return;
-		}
-
-		if (sender->role == ROLE_VISITOR && !(room->flags & MUC_FLAG_VISITORSPM)) {
-			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PM]);
-			return;
-		}
-
-		if (!(room->flags & MUC_FLAG_ALLOWPM)) {
-			router_error(chunk, &error_definitions[ERROR_NO_PM]);
-			return;
-		}
-
-		LDEBUG("sending private message to '%.*s', real JID '%.*s'",
-				BPT_SIZE(&receiver->nick), receiver->nick.data,
-				JID_LEN(&receiver->jid), JID_STR(&receiver->jid));
-		router_cleanup(ingress);
-		send_to_participants(chunk, receiver, 1);
-	} else if (ingress->type == 'g') {
+	if (BPT_NULL(&ingress->proxy_to.resource)) {
 		if (room->flags & MUC_FLAG_MODERATEDROOM && sender->role < ROLE_PARTICIPANT) {
 			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PUBLIC]);
 			return;
@@ -801,6 +780,27 @@ static void route_message(Room *room, RouterChunk *chunk) {
 		router_cleanup(ingress);
 		history_push(&room->history, chunk, &sender->nick);
 		send_to_participants(chunk, room->participants.first, 1 << 30);
+	} else {
+		if (!(receiver = room_participant_by_nick(room, &ingress->proxy_to.resource))) {
+			router_error(chunk, &error_definitions[ERROR_RECIPIENT_NOT_IN_ROOM]);
+			return;
+		}
+
+		if (sender->role == ROLE_VISITOR && !(room->flags & MUC_FLAG_VISITORSPM)) {
+			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PM]);
+			return;
+		}
+
+		if (!(room->flags & MUC_FLAG_ALLOWPM)) {
+			router_error(chunk, &error_definitions[ERROR_NO_PM]);
+			return;
+		}
+
+		LDEBUG("sending private message to '%.*s', real JID '%.*s'",
+				BPT_SIZE(&receiver->nick), receiver->nick.data,
+				JID_LEN(&receiver->jid), JID_STR(&receiver->jid));
+		router_cleanup(ingress);
+		send_to_participants(chunk, receiver, 1);
 	}
 }
 

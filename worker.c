@@ -126,10 +126,8 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 			LDEBUG("dropping: message/presence without node name");
 			return FALSE;
 		}
-		if (packet->name == 'm' && packet->type != 'e' &&
-				(BPT_BLANK(&packet->proxy_to.resource) == (packet->type == 'c'))) {
-			// The nickname (resource) is specified and type is not c(hat) - thus g(roupchat)
-			LDEBUG("dropping: wrong message type");
+		if (packet->name == 'm' && BPT_NULL(&packet->proxy_to.resource) && packet->type != 'g') {
+			LDEBUG("dropping: wrong message type for groupchat");
 			return FALSE;
 		}
 	}
