@@ -280,8 +280,8 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 			BUF_PUSH_BOOL(room->flags & MUC_FLAG_INVITES), );
 	BUF_PUSH_FIELD("boolean", "Allow visitors to send private messages",
 			"muc#roomconfig_allowvisitorspm", BUF_PUSH_BOOL(room->flags & MUC_FLAG_VISITORSPM), );
-	BUF_PUSH_FIELD("boolean", "Allow visitors to send status text in presence updates",
-			"muc#roomconfig_allowvisitorstatus", BUF_PUSH_BOOL(room->flags & MUC_FLAG_VISITORPRESENCE), );
+	BUF_PUSH_FIELD("boolean", "Allow visitors to send custom status and change nickname",
+			"muc#roomconfig_allowvisitorpresence", BUF_PUSH_BOOL(room->flags & MUC_FLAG_VISITORPRESENCE), );
 	BUF_PUSH_LITERAL("</x>");
 
 	return TRUE;

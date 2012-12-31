@@ -900,16 +900,14 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	}
 
 	if ((sender = room_participant_by_jid(room, &ingress->real_from))) {
-		if (sender->role == ROLE_VISITOR &&
-				!(room->flags & MUC_FLAG_VISITORPRESENCE)) {
-			// Visitors are not allowed to update presence
-			router_error(chunk, &error_definitions[ERROR_NO_VISITORS_PRESENCE]);
-			return;
-		}
-
 		// Sender is already a participant
 		if (!BPT_NULL(&ingress->proxy_to.resource) &&
 				(receiver = room_participant_by_nick(room, &ingress->proxy_to.resource)) != sender) {
+			if (sender->role <= ROLE_VISITOR && !(room->flags & MUC_FLAG_VISITORPRESENCE)) {
+				// Ignore nick changes from visitors
+				return;
+			}
+
 			// Participant wants to change a nickname
 			if (receiver) {
 				router_error(chunk, &error_definitions[ERROR_OCCUPANT_CONFLICT]);
@@ -1011,8 +1009,10 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 		just_joined = TRUE;
 	}
 
-	// Broadcast sender's presence to all participants
-	egress->user_data = ingress->inner;
+	if (sender->role > ROLE_VISITOR || room->flags & MUC_FLAG_VISITORPRESENCE) {
+		// Broadcast sender's presence to all participants
+		egress->user_data = ingress->inner;
+	}
 	// TODO(artem): set role = none if type = unavailable
 	room_broadcast_presence(room, egress, &chunk->send, sender);
 
@@ -1024,15 +1024,20 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	if (ingress->type == 'u') {
 		room_leave(room, sender);
 	} else {
-		if (BPT_SIZE(&ingress->inner) <= REASONABLE_RAW_LIMIT) {
+		if (BPT_SIZE(&egress->user_data) <= REASONABLE_RAW_LIMIT) {
 			// Cache participant's presence to broadcast it to newcomers
-			if (sender->presence.data) {
-				sender->presence.data = realloc(sender->presence.data, BPT_SIZE(&ingress->inner));
+			if (BPT_BLANK(&egress->user_data)) {
+				free(sender->presence.data);
+				BPT_INIT(&sender->presence);
 			} else {
-				sender->presence.data = malloc(BPT_SIZE(&ingress->inner));
+				if (sender->presence.data) {
+					sender->presence.data = realloc(sender->presence.data, BPT_SIZE(&egress->user_data));
+				} else {
+					sender->presence.data = malloc(BPT_SIZE(&egress->user_data));
+				}
+				sender->presence.end = sender->presence.data + BPT_SIZE(&egress->user_data);
+				memcpy(sender->presence.data, egress->user_data.data, BPT_SIZE(&egress->user_data));
 			}
-			sender->presence.end = sender->presence.data + BPT_SIZE(&ingress->inner);
-			memcpy(sender->presence.data, ingress->inner.data, BPT_SIZE(&ingress->inner));
 		}
 	}
 }
@@ -1216,7 +1221,7 @@ static BOOL room_config_option_set(Room *room, BufferPtr *var, BufferPtr *value,
 		} else {
 			room->flags &= ~MUC_FLAG_VISITORSPM;
 		}
-	} else if (BPT_EQ_LIT("muc#roomconfig_allowvisitorstatus", var)) {
+	} else if (BPT_EQ_LIT("muc#roomconfig_allowvisitorpresence", var)) {
 		if (btoi(value)) {
 			room->flags |= MUC_FLAG_VISITORPRESENCE;
 		} else {

@@ -134,10 +134,10 @@ void router_process(RouterChunk *chunk) {
 			BPT_SIZE(&ingress->header), ingress->header.data,
 			BPT_SIZE(&ingress->inner), ingress->inner.data);
 
-	if (BPT_SIZE(&ingress->proxy_to.node)) {
-		rooms_route(chunk);
-	} else {
+	if (BPT_NULL(&ingress->proxy_to.node)) {
 		component_handle(chunk);
+	} else {
+		rooms_route(chunk);
 	}
 }
 
