@@ -502,6 +502,8 @@ static BOOL room_affiliation_add(Room *room, ParticipantEntry *sender, int affil
 		jid_cpy(&affiliation_entry->jid, jid, JID_NODE | JID_HOST);
 		if (reason_node) {
 			buffer_ptr_cpy(&affiliation_entry->reason_node, reason_node);
+		} else {
+			BPT_INIT(&affiliation_entry->reason_node);
 		}
 		affiliation_entry->next = room->affiliations[affiliation];
 		room->affiliations[affiliation] = affiliation_entry;
