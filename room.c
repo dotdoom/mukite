@@ -448,14 +448,13 @@ BOOL affiliations_deserialize(AffiliationEntry **list, FILE *input, int limit) {
 	return TRUE;
 }
 
-static BOOL room_affiliation_add(Room *room, int sender_affiliation, int affiliation,
+static BOOL room_affiliation_add(Room *room, ParticipantEntry *sender, int affiliation,
 		Jid *jid, BufferPtr *reason_node) {
 	int list;
 	AffiliationEntry *affiliation_entry = 0,
 					 *previous_affiliation_entry = 0;
 
-	if (sender_affiliation != AFFIL_OWNER &&
-			affiliation >= AFFIL_ADMIN) {
+	if (sender && sender->affiliation != AFFIL_OWNER && affiliation >= AFFIL_ADMIN) {
 		return FALSE;
 	}
 
@@ -474,10 +473,18 @@ static BOOL room_affiliation_add(Room *room, int sender_affiliation, int affilia
 	}
 
 	if (affiliation_entry) {
-		if (sender_affiliation != AFFIL_OWNER &&
-				list >= AFFIL_ADMIN) {
+		if (sender && sender->affiliation != AFFIL_OWNER && list >= AFFIL_ADMIN) {
 			return FALSE;
 		}
+		if (list == AFFIL_OWNER &&
+				sender &&
+				!jid_cmp(&sender->jid, &affiliation_entry->jid, JID_NODE | JID_HOST) &&
+				room->affiliations[AFFIL_OWNER] == affiliation_entry &&
+				!affiliation_entry->next) {
+			// Owner trying to revoke own privilege when there are no other owners
+			return FALSE;
+		}
+
 		affiliations_detach_clear(&room->affiliations[list],
 				affiliation_entry,
 				previous_affiliation_entry);
@@ -958,7 +965,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 		// TODO(artem): check globally registered nickname
 
 		if (room->flags & MUC_FLAG_JUST_CREATED) {
-			room_affiliation_add(room, AFFIL_OWNER, AFFIL_OWNER, &ingress->real_from, 0);
+			room_affiliation_add(room, 0, AFFIL_OWNER, &ingress->real_from, 0);
 			room->flags &= ~MUC_FLAG_JUST_CREATED;
 			builder_push_status_code(&egress->presence.status_codes, STATUS_ROOM_CREATED);
 		}
@@ -1441,7 +1448,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 						return;
 					}
 
-					if (!room_affiliation_add(room, sender->affiliation, target.affiliation,
+					if (!room_affiliation_add(room, sender, target.affiliation,
 								&target.jid, &target.reason_node)) {
 						router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
 						return;
