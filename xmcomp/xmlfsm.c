@@ -41,8 +41,11 @@ int xmlfsm_skip_node(BufferPtr *buffer, int level, BufferPtr *real_buffer) {
 		if (quote_char) {
 			// We aren't validating here. We just parse what we have.
 			// Totally ignore XML within quotes.
-			if (*buffer->data == quote_char) {
+			buffer->data = memchr(buffer->data, quote_char, current_end - buffer->data);
+			if (buffer->data) {
 				quote_char = 0;
+			} else {
+				buffer->data = current_end - 1;
 			}
 		} else {
 			switch (*buffer->data) {
