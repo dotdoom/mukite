@@ -16,7 +16,7 @@
 		case 0xFC: length += 6; break; \
 	}
 
-int xmlfsm_skip_node(BufferPtr *buffer, int level, BufferPtr *real_buffer) {
+int xmlfsm_skip_node(BufferPtr *buffer, BufferPtr *real_buffer) {
 	char *tag_closing_pos = 0, *orig_start = buffer->data;
 	int nesting_level = 0;
 	char quote_char = 0;
@@ -66,7 +66,7 @@ int xmlfsm_skip_node(BufferPtr *buffer, int level, BufferPtr *real_buffer) {
 							--nesting_level;
 						}
 
-						if (nesting_level == level) {
+						if (!nesting_level) {
 							++buffer->data;
 							return XMLPARSE_SUCCESS;
 						}
@@ -92,7 +92,7 @@ int xmlfsm_skip_node(BufferPtr *buffer, int level, BufferPtr *real_buffer) {
 #define SKIP(ptr, expr) \
 	{ while (expr) { ++(ptr); } }
 
-int xmlfsm_get_attr(BufferPtr *buffer, XmlAttr *attr) {
+int xmlfsm_next_attr(BufferPtr *buffer, XmlAttr *attr) {
 	char quote;
 	attr->name.data = attr->name.end =
 		attr->value.data = attr->value.end = 0;
@@ -148,29 +148,43 @@ int xmlfsm_node_name(BufferPtr *buffer, Buffer *name) {
 BOOL xmlfsm_skip_attrs(BufferPtr *buffer) {
 	XmlAttr attr;
 	int last_get_attr_result;
-	while ((last_get_attr_result = xmlfsm_get_attr(buffer, &attr)) == XMLPARSE_SUCCESS) {
+	while ((last_get_attr_result = xmlfsm_next_attr(buffer, &attr)) == XMLPARSE_SUCCESS) {
 		;
 	}
 	return last_get_attr_result == XMLNODE_NOATTR;
 }
 
-BOOL xmlfsm_skipto_attr(BufferPtr *buffer, char *name, XmlAttr *attr) {
-	int name_size = strlen(name);
-	while (xmlfsm_get_attr(buffer, attr) == XMLPARSE_SUCCESS) {
-		if (BPT_EQ_BIN(name, &attr->name, name_size)) {
+BOOL xmlfsm_skipto_attr(BufferPtr *buffer, char *attr_name, XmlAttr *attr) {
+	int name_size = strlen(attr_name);
+	while (xmlfsm_next_attr(buffer, attr) == XMLPARSE_SUCCESS) {
+		if (BPT_EQ_BIN(attr_name, &attr->name, name_size)) {
 			return TRUE;
 		}
 	}
 	return FALSE;
 }
 
-BOOL xmlfsm_traverse_node(XmlNodeTraverser *data) {
+BOOL xmlfsm_next_sibling(XmlNodeTraverser *data) {
 	data->node.data = data->buffer.data;
-	if (xmlfsm_skip_node(&data->buffer, 0, 0) == XMLPARSE_SUCCESS) {
+	if (xmlfsm_skip_node(&data->buffer, 0) == XMLPARSE_SUCCESS) {
 		data->node.end = data->buffer.data;
 		data->node_start = data->node.data;
 		xmlfsm_node_name(&data->node, &data->node_name);
 		return TRUE;
+	}
+	return FALSE;
+}
+
+BOOL xmlfsm_skipto_node(BufferPtr *buffer, char *node_name, BufferPtr *node) {
+	XmlNodeTraverser nodes = { .buffer = *buffer };
+	int name_size = strlen(node_name);
+	while (xmlfsm_next_sibling(&nodes)) {
+		if (BUF_EQ_BIN(node_name, &nodes.node_name, name_size)) {
+			node->data = nodes.node_start;
+			node->end = nodes.node.end;
+			*buffer = nodes.buffer;
+			return TRUE;
+		}
 	}
 	return FALSE;
 }

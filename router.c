@@ -70,7 +70,7 @@ void component_handle(RouterChunk *chunk) {
 
 	switch (ingress->type) {
 		case 'g':
-			while (xmlfsm_traverse_node(&nodes)) {
+			while (xmlfsm_next_sibling(&nodes)) {
 				if (!xmlfsm_skipto_attr(&nodes.node, "xmlns", &xmlns_attr)) {
 					continue;
 				}

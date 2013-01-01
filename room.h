@@ -41,7 +41,7 @@ typedef struct HistoryEntry {
 
 typedef struct AffiliationEntry {
 	Jid jid;
-	Buffer reason;
+	BufferPtr reason_node;
 	struct AffiliationEntry *next;
 } AffiliationEntry;
 
@@ -52,9 +52,12 @@ typedef struct ParticipantEntry {
 	BufferPtr presence;
 	time_t last_message_time;
 
-	// This flag is used to avoid duplicates when building affected list
-	BOOL muc_admin_affected;
-	struct ParticipantEntry *muc_admin_next_affected;
+	struct {
+		// This flag is used to avoid duplicates when building affected list
+		BOOL included;
+		BufferPtr reason_node;
+		struct ParticipantEntry *next;
+	} affected_list;
 
 	struct ParticipantEntry *prev, *next;
 } ParticipantEntry;
@@ -109,7 +112,7 @@ typedef struct Room {
 	} history;
 
 	struct {
-		BufferPtr data, nick;
+		BufferPtr node, nick;
 	} subject;
 
 	struct Room *prev, *next;

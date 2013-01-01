@@ -20,6 +20,8 @@ typedef struct {
 #define BUF_EQ_LIT(literal, b) \
 	(sizeof(literal)-1 == (b)->size && \
 	 !memcmp((literal), (b)->data, sizeof(literal)-1))
+#define BUF_EQ_BIN(bin, b, len) \
+	((b)->size == (len) && !memcmp((bin), (b)->data, (len)))
 
 BOOL buffer_serialize(Buffer *, FILE *);
 BOOL buffer_deserialize(Buffer *, FILE *, int);
@@ -44,7 +46,7 @@ typedef struct {
 	{ .data = (bptr)->data, .size = BPT_SIZE(bptr) }
 #define BPT_INITIALIZER { .data = 0, .end = 0 }
 #define BPT_EQ_BIN(bin, bptr, len) \
-	(BPT_SIZE(bptr) == (len) && !memcmp((bin), (bptr)->data, len))
+	(BPT_SIZE(bptr) == (len) && !memcmp((bin), (bptr)->data, (len)))
 
 BOOL buffer_ptr_serialize(BufferPtr *, FILE *);
 BOOL buffer_ptr_deserialize(BufferPtr *, FILE *, int);

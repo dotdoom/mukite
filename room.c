@@ -191,7 +191,7 @@ void history_shift(struct HistoryList *history) {
 	}
 }
 
-static AffiliationEntry *room_affiliation_detach_clear(AffiliationEntry **list,
+static AffiliationEntry *affiliations_detach_clear(AffiliationEntry **list,
 		AffiliationEntry *affiliation, AffiliationEntry *prev) {
 	if (prev) {
 		prev->next = affiliation->next;
@@ -199,7 +199,7 @@ static AffiliationEntry *room_affiliation_detach_clear(AffiliationEntry **list,
 		*list = affiliation->next;
 	}
 	jid_destroy(&affiliation->jid);
-	free(affiliation->reason.data);
+	free(affiliation->reason_node.data);
 	return affiliation;
 }
 
@@ -217,12 +217,12 @@ void room_destroy(Room *room) {
 	free(room->node.data);
 	free(room->title.data);
 	free(room->description.data);
-	free(room->subject.data.data);
+	free(room->subject.node.data);
 	free(room->subject.nick.data);
 	free(room->password.data);
 	for (i = AFFIL_OUTCAST; i <= AFFIL_OWNER; ++i) {
 		while (room->affiliations[i]) {
-			free(room_affiliation_detach_clear(&room->affiliations[i], room->affiliations[i], 0));
+			free(affiliations_detach_clear(&room->affiliations[i], room->affiliations[i], 0));
 		}
 	}
 	while (room->history.size) {
@@ -432,7 +432,7 @@ BOOL affiliations_serialize(AffiliationEntry *list, FILE *output) {
 	LDEBUG("serializing affiliations list");
 	SERIALIZE_LIST(
 		jid_serialize(&list->jid, output) &&
-		buffer_serialize(&list->reason, output)
+		buffer_ptr_serialize(&list->reason_node, output)
 	);
 	return TRUE;
 }
@@ -443,12 +443,13 @@ BOOL affiliations_deserialize(AffiliationEntry **list, FILE *input, int limit) {
 	LDEBUG("deserializing affiliations list");
 	DESERIALIZE_LIST(
 		jid_deserialize(&new_entry->jid, input) &&
-		buffer_deserialize(&new_entry->reason, input, MAX_JID_PART_SIZE),
+		buffer_ptr_deserialize(&new_entry->reason_node, input, MAX_JID_PART_SIZE),
 	);
 	return TRUE;
 }
 
-static BOOL room_affiliation_add(Room *room, int sender_affiliation, int affiliation, Jid *jid) {
+static BOOL room_affiliation_add(Room *room, int sender_affiliation, int affiliation,
+		Jid *jid, BufferPtr *reason_node) {
 	int list;
 	AffiliationEntry *affiliation_entry = 0,
 					 *previous_affiliation_entry = 0;
@@ -477,9 +478,10 @@ static BOOL room_affiliation_add(Room *room, int sender_affiliation, int affilia
 				list >= AFFIL_ADMIN) {
 			return FALSE;
 		}
-		room_affiliation_detach_clear(&room->affiliations[list],
+		affiliations_detach_clear(&room->affiliations[list],
 				affiliation_entry,
 				previous_affiliation_entry);
+		BPT_INIT(&affiliation_entry->reason_node);
 
 		if (affiliation == AFFIL_NONE) {
 			free(affiliation_entry);
@@ -491,9 +493,9 @@ static BOOL room_affiliation_add(Room *room, int sender_affiliation, int affilia
 			affiliation_entry = malloc(sizeof(*affiliation_entry));
 		}
 		jid_cpy(&affiliation_entry->jid, jid, JID_NODE | JID_HOST);
-		affiliation_entry->reason.data = malloc(4);
-		memcpy(affiliation_entry->reason.data, "test", 4);
-		affiliation_entry->reason.size = 4;
+		if (reason_node) {
+			buffer_ptr_cpy(&affiliation_entry->reason_node, reason_node);
+		}
 		affiliation_entry->next = room->affiliations[affiliation];
 		room->affiliations[affiliation] = affiliation_entry;
 	}
@@ -513,7 +515,7 @@ BOOL room_serialize(Room *room, FILE *output) {
 		buffer_serialize(&room->description, output) &&
 		buffer_serialize(&room->password, output) &&
 
-		buffer_ptr_serialize(&room->subject.data, output) &&
+		buffer_ptr_serialize(&room->subject.node, output) &&
 		buffer_ptr_serialize(&room->subject.nick, output) &&
 
 		SERIALIZE_BASE(room->flags) &&
@@ -539,7 +541,7 @@ BOOL room_deserialize(Room *room, FILE *input) {
 		buffer_deserialize(&room->description, input, USER_STRING_OPTION_LIMIT) &&
 		buffer_deserialize(&room->password, input, USER_STRING_OPTION_LIMIT) &&
 
-		buffer_ptr_deserialize(&room->subject.data, input, USER_STRING_OPTION_LIMIT) &&
+		buffer_ptr_deserialize(&room->subject.node, input, USER_STRING_OPTION_LIMIT) &&
 		buffer_ptr_deserialize(&room->subject.nick, input, USER_STRING_OPTION_LIMIT) &&
 
 		DESERIALIZE_BASE(room->flags) &&
@@ -560,7 +562,7 @@ BOOL room_deserialize(Room *room, FILE *input) {
 static BOOL get_subject_node(BufferPtr *packet, BufferPtr *subject) {
 	XmlNodeTraverser nodes = { .buffer = *packet };
 
-	while (xmlfsm_traverse_node(&nodes)) {
+	while (xmlfsm_next_sibling(&nodes)) {
 		if (BUF_EQ_LIT("subject", &nodes.node_name)) {
 			subject->data = nodes.node_start;
 			subject->end = nodes.node.end;
@@ -581,15 +583,15 @@ static void send_to_participants(RouterChunk *chunk, ParticipantEntry *participa
 	}
 }
 
-BOOL room_attach_config_status_codes(Room *room, MucAdmNode *participant) {
+BOOL room_attach_config_status_codes(Room *room, StatusCodes *codes) {
 	if (!(room->flags & MUC_FLAG_SEMIANONYMOUS)) {
-		if (!builder_push_status_code(participant, STATUS_NON_ANONYMOUS)) {
+		if (!builder_push_status_code(codes, STATUS_NON_ANONYMOUS)) {
 			return FALSE;
 		}
 	}
 
 	if (room->flags & MUC_FLAG_ENABLELOGGING) {
-		if (!builder_push_status_code(participant, STATUS_LOGGING_ENABLED)) {
+		if (!builder_push_status_code(codes, STATUS_LOGGING_ENABLED)) {
 			return FALSE;
 		}
 	}
@@ -598,29 +600,29 @@ BOOL room_attach_config_status_codes(Room *room, MucAdmNode *participant) {
 }
 
 static BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallback *send, ParticipantEntry *sender) {
-	int orig_status_codes_count = egress->participant.status_codes_count;
+	int orig_status_codes_size = egress->presence.status_codes.size;
 	ParticipantEntry *receiver = room->participants.first;
 
 	egress->name = 'p';
 	egress->from_nick = sender->nick;
-	egress->participant.affiliation = sender->affiliation;
-	egress->participant.role = sender->role;
+	egress->presence.item.affiliation = sender->affiliation;
+	egress->presence.item.role = sender->role;
 
 	for (; receiver; receiver = receiver->next) {
 		if (receiver == sender) {
-			if (!room_attach_config_status_codes(room, &egress->participant)) {
+			if (!room_attach_config_status_codes(room, &egress->presence.status_codes)) {
 				LERROR("[BUG] unexpected status codes buffer overflow when trying to push room config");
 				return FALSE;
 			}
-			builder_push_status_code(&egress->participant, STATUS_SELF_PRESENCE);
+			builder_push_status_code(&egress->presence.status_codes, STATUS_SELF_PRESENCE);
 		} else {
-			egress->participant.status_codes_count = orig_status_codes_count;
+			egress->presence.status_codes.size = orig_status_codes_size;
 		}
 		egress->to = receiver->jid;
 		if (receiver->role == ROLE_MODERATOR || !(room->flags & MUC_FLAG_SEMIANONYMOUS)) {
-			egress->participant.jid = &sender->jid;
+			egress->presence.item.jid = sender->jid;
 		} else {
-			egress->participant.jid = 0;
+			jid_init(&egress->presence.item.jid);
 		}
 		SEND(send);
 	}
@@ -712,13 +714,13 @@ static void history_send(HistoryEntry *history, RouterChunk *chunk, ParticipantE
 static void room_subject_send(Room *room, RouterChunk *chunk, ParticipantEntry *receiver) {
 	BuilderPacket *egress = &chunk->egress;
 
-	if (!BPT_NULL(&room->subject.data)) {
+	if (!BPT_NULL(&room->subject.node)) {
 		egress->name = 'm';
 		egress->type = 'g';
 		egress->to = receiver->jid;
 		egress->from_nick = room->subject.nick;
 		BPT_INIT(&egress->header);
-		egress->user_data = room->subject.data;
+		egress->user_data = room->subject.node;
 		SEND(&chunk->send);
 	}
 }
@@ -766,14 +768,14 @@ static void route_message(Room *room, RouterChunk *chunk) {
 				router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
 				return;
 			}
-			free(room->subject.data.data);
+			free(room->subject.node.data);
 			free(room->subject.nick.data);
 			if (BPT_NULL(&new_subject)) {
 				BPT_INIT(&room->subject.nick);
-				BPT_INIT(&room->subject.data);
+				BPT_INIT(&room->subject.node);
 			} else {
 				buffer_ptr_cpy(&room->subject.nick, &sender->nick);
-				buffer_ptr_cpy(&room->subject.data, &new_subject);
+				buffer_ptr_cpy(&room->subject.node, &new_subject);
 			}
 		}
 
@@ -819,14 +821,14 @@ static int btoi(BufferPtr *buffer) {
 static void parse_muc_node(BufferPtr *buffer, MucNode *muc_node) {
 	XmlNodeTraverser nodes = { .buffer = *buffer };
 	XmlAttr attr;
-	while (xmlfsm_traverse_node(&nodes)) {
+	while (xmlfsm_next_sibling(&nodes)) {
 		if (BUF_EQ_LIT("password", &nodes.node_name)) {
 			if (xmlfsm_skip_attrs(&nodes.node)) {
 				muc_node->password = nodes.node;
 				muc_node->password.end -= sizeof("</password>") - 1;
 			}
 		} else if (BUF_EQ_LIT("history", &nodes.node_name)) {
-			while (xmlfsm_get_attr(&nodes.node, &attr) == XMLPARSE_SUCCESS) {
+			while (xmlfsm_next_attr(&nodes.node, &attr) == XMLPARSE_SUCCESS) {
 				if (BPT_EQ_LIT("maxstanzas", &attr.name)) {
 					muc_node->history.max_stanzas = btoi(&attr.value);
 				} else if (BPT_EQ_LIT("maxchars", &attr.name)) {
@@ -856,7 +858,7 @@ static BOOL fetch_muc_nodes(IncomingPacket *packet, MucNode *muc_node) {
 		}
 	}
 
-	while (xmlfsm_traverse_node(&nodes)) {
+	while (xmlfsm_next_sibling(&nodes)) {
 		if (BUF_EQ_LIT("x", &nodes.node_name)) {
 			if (!xmlfsm_skipto_attr(&nodes.node, "xmlns", &attr)) {
 				continue;
@@ -918,10 +920,10 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 				// TODO(artem): check globally registered nickname
 
 				buffer_ptr_cpy(&new_nick, &ingress->proxy_to.resource);
-				egress->participant.nick = new_nick;
+				egress->presence.item.nick = new_nick;
 				egress->user_data = ingress->inner;
 				egress->type = 'u';
-				builder_push_status_code(&egress->participant, STATUS_NICKNAME_CHANGED);
+				builder_push_status_code(&egress->presence.status_codes, STATUS_NICKNAME_CHANGED);
 				router_cleanup(ingress);
 
 				room_broadcast_presence(room, egress, &chunk->send, sender);
@@ -929,8 +931,7 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 				free(sender->nick.data);
 				sender->nick = new_nick;
 				egress->type = 0;
-				egress->participant.nick.data =
-					egress->participant.nick.end = 0;
+				BPT_INIT(&egress->presence.item.nick);
 			} else {
 				router_cleanup(ingress);
 			}
@@ -957,9 +958,9 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 		// TODO(artem): check globally registered nickname
 
 		if (room->flags & MUC_FLAG_JUST_CREATED) {
-			room_affiliation_add(room, AFFIL_OWNER, AFFIL_OWNER, &ingress->real_from);
+			room_affiliation_add(room, AFFIL_OWNER, AFFIL_OWNER, &ingress->real_from, 0);
 			room->flags &= ~MUC_FLAG_JUST_CREATED;
-			builder_push_status_code(&egress->participant, STATUS_ROOM_CREATED);
+			builder_push_status_code(&egress->presence.status_codes, STATUS_ROOM_CREATED);
 		}
 		if (acl_role(chunk->acl, &ingress->real_from) >= ACL_MUC_ADMIN) {
 			affiliation = AFFIL_OWNER;
@@ -995,13 +996,13 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 		// as we know this is the one who just joined
 		for (sender = room->participants.first->next; sender; sender = sender->next) {
 			egress->from_nick = sender->nick;
-			egress->participant.affiliation = sender->affiliation;
-			egress->participant.role = sender->role;
+			egress->presence.item.affiliation = sender->affiliation;
+			egress->presence.item.role = sender->role;
 			egress->user_data = sender->presence;
 			if (receiver->role == ROLE_MODERATOR || !(room->flags & MUC_FLAG_SEMIANONYMOUS)) {
-				egress->participant.jid = &sender->jid;
+				egress->presence.item.jid = sender->jid;
 			} else {
-				egress->participant.jid = 0;
+				jid_init(&egress->presence.item.jid);
 			}
 			send_to_participants(chunk, receiver, 1);
 		}
@@ -1065,21 +1066,23 @@ static int role_by_name(BufferPtr *name) {
 	return ROLE_UNCHANGED;
 }
 
-static int next_muc_admin_item(BufferPtr *node, ParticipantEntry *target) {
+static int next_muc_admin_item(BufferPtr *node, MucAdminItem *target) {
 	XmlAttr node_attr;
 	XmlNodeTraverser nodes = { .buffer = *node };
+	int attr_state;
 
 	jid_init(&target->jid);
 	target->role = ROLE_UNCHANGED;
 	target->affiliation = AFFIL_UNCHANGED;
 	BPT_INIT(&target->nick);
+	BPT_INIT(&target->reason_node);
 
-	while (xmlfsm_traverse_node(&nodes)) {
+	while (xmlfsm_next_sibling(&nodes)) {
 		if (!BUF_EQ_LIT("item", &nodes.node_name)) {
 			continue;
 		}
 
-		while (xmlfsm_get_attr(&nodes.node, &node_attr) == XMLPARSE_SUCCESS) {
+		while ((attr_state = xmlfsm_next_attr(&nodes.node, &node_attr)) == XMLPARSE_SUCCESS) {
 			if (BPT_EQ_LIT("affiliation", &node_attr.name)) {
 				target->affiliation = affiliation_by_name(&node_attr.value);
 				if (target->affiliation == AFFIL_UNCHANGED) {
@@ -1099,18 +1102,28 @@ static int next_muc_admin_item(BufferPtr *node, ParticipantEntry *target) {
 			}
 		}
 
+		if (attr_state == XMLNODE_NOATTR) {
+			xmlfsm_skipto_node(&nodes.node, "reason", &target->reason_node);
+		}
+
 		*node = nodes.buffer;
 		return TRUE;
 	}
 	return FALSE;
 }
 
-static void push_affected_participant(ParticipantEntry **first, ParticipantEntry **current, ParticipantEntry *new) {
-	if (!new->muc_admin_affected) {
-		new->muc_admin_affected = TRUE;
-		new->muc_admin_next_affected = 0;
+static void push_affected_participant(ParticipantEntry **first, ParticipantEntry **current,
+		ParticipantEntry *new, BufferPtr *reason_node) {
+	if (!new->affected_list.included) {
+		new->affected_list.included = TRUE;
+		if (reason_node) {
+			new->affected_list.reason_node = *reason_node;
+		} else {
+			BPT_INIT(&new->affected_list.reason_node);
+		}
+		new->affected_list.next = 0;
 		if (*first) {
-			(*current)->muc_admin_next_affected = new;
+			(*current)->affected_list.next = new;
 			*current = new;
 		} else {
 			*first = *current = new;
@@ -1234,14 +1247,14 @@ static BOOL room_config_option_set(Room *room, BufferPtr *var, BufferPtr *value,
 static BOOL room_config_parse(Room *room, BufferPtr *data, int acl) {
 	XmlNodeTraverser field_nodes = { .buffer = *data }, value_nodes;
 	XmlAttr var;
-	while (xmlfsm_traverse_node(&field_nodes)) {
+	while (xmlfsm_next_sibling(&field_nodes)) {
 		if (!BUF_EQ_LIT("field", &field_nodes.node_name) ||
 				!xmlfsm_skipto_attr(&field_nodes.node, "var", &var) ||
 				!xmlfsm_skip_attrs(&field_nodes.node)) {
 			continue;
 		}
 		value_nodes.buffer = field_nodes.node;
-		while (xmlfsm_traverse_node(&value_nodes)) {
+		while (xmlfsm_next_sibling(&value_nodes)) {
 			if (!BUF_EQ_LIT("value", &value_nodes.node_name) ||
 					!xmlfsm_skip_attrs(&value_nodes.node)) {
 				continue;
@@ -1258,9 +1271,10 @@ static BOOL room_config_parse(Room *room, BufferPtr *data, int acl) {
 static void route_iq(Room *room, RouterChunk *chunk) {
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
-	ParticipantEntry *sender = 0, *receiver = 0, target,
+	ParticipantEntry *sender = 0, *receiver = 0,
 					 *first_affected_participant = 0,
 					 *current_affected_participant = 0;
+	MucAdminItem target;
 
 	BufferPtr xmlns = BPT_INITIALIZER;
 	XmlAttr node_attr;
@@ -1293,7 +1307,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 		// special routing for vcard request - 'to' should not contain resource
 		if (ingress->type == 'g') {
 			nodes.buffer = ingress->inner;
-			if (xmlfsm_traverse_node(&nodes)) {
+			if (xmlfsm_next_sibling(&nodes)) {
 				if (BUF_EQ_LIT("vCard", &nodes.node_name)) {
 					BPT_INIT(&egress->to.resource);
 				}
@@ -1307,7 +1321,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 	egress->type = 'r';
 
 	// first find <query> node and it's xmlns
-	while (xmlfsm_traverse_node(&nodes)) {
+	while (xmlfsm_next_sibling(&nodes)) {
 		if (BUF_EQ_LIT("query", &nodes.node_name)) {
 			if (xmlfsm_skipto_attr(&nodes.node, "xmlns", &node_attr)) {
 				xmlns = node_attr.value;
@@ -1418,7 +1432,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 					receiver->role = target.role;
 
 					push_affected_participant(&first_affected_participant,
-							&current_affected_participant, receiver);
+							&current_affected_participant, receiver, &target.reason_node);
 				}
 
 				if (target.affiliation != AFFIL_UNCHANGED) {
@@ -1427,7 +1441,8 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 						return;
 					}
 
-					if (!room_affiliation_add(room, sender->affiliation, target.affiliation, &target.jid)) {
+					if (!room_affiliation_add(room, sender->affiliation, target.affiliation,
+								&target.jid, &target.reason_node)) {
 						router_error(chunk, &error_definitions[ERROR_PRIVILEGE_LEVEL]);
 						return;
 					}
@@ -1441,7 +1456,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 								ROLE_PARTICIPANT;
 							receiver->affiliation = target.affiliation;
 							push_affected_participant(&first_affected_participant,
-									&current_affected_participant, receiver);
+									&current_affected_participant, receiver, &target.reason_node);
 						}
 					}
 				}
@@ -1465,17 +1480,17 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			}
 
 			nodes.buffer = nodes.node;
-			while (xmlfsm_traverse_node(&nodes)) {
+			while (xmlfsm_next_sibling(&nodes)) {
 				if (BUF_EQ_LIT("destroy", &nodes.node_name)) {
 					room->flags |= MUC_FLAG_DESTROYED;
+					nodes.node.data = nodes.node_start;
 					for (receiver = room->participants.first; receiver; receiver = receiver->next) {
 						receiver->role = ROLE_NONE;
 						receiver->affiliation = AFFIL_NONE;
+						egress->presence.resume = nodes.node;
 						push_affected_participant(&first_affected_participant,
-								&current_affected_participant, receiver);
+								&current_affected_participant, receiver, 0);
 					}
-					egress->participant.destroy_node.data = nodes.node_start;
-					egress->participant.destroy_node.end = nodes.node.end;
 					egress->iq_type = BUILD_IQ_EMPTY;
 					break;
 				} else if (BUF_EQ_LIT("x", &nodes.node_name)) {
@@ -1486,11 +1501,12 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 						}
 					}
 					if (room->flags & MUC_FLAG_MEMBERSONLY) {
+						BPT_SET_LIT(&nodes.node, "<reason>Room policy switched to members-only</reason>");
 						for (receiver = room->participants.first; receiver; receiver = receiver->next) {
 							if (receiver->affiliation < AFFIL_MEMBER) {
 								receiver->role = ROLE_NONE;
 								push_affected_participant(&first_affected_participant,
-										&current_affected_participant, receiver);
+										&current_affected_participant, receiver, &nodes.node);
 							}
 						}
 					}
@@ -1515,20 +1531,21 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 
 	for (current_affected_participant = first_affected_participant;
 			current_affected_participant; ) {
-		current_affected_participant->muc_admin_affected = FALSE;
-		egress->participant.status_codes_count = 0;
+		current_affected_participant->affected_list.included = FALSE;
+		egress->presence.item.reason_node = current_affected_participant->affected_list.reason_node;
+		egress->presence.status_codes.size = 0;
 		egress->type = '\0';
 		if (room->flags & MUC_FLAG_DESTROYED) {
 			egress->type = 'u';
 		} else if (current_affected_participant->affiliation == AFFIL_OUTCAST) {
-			builder_push_status_code(&egress->participant, STATUS_BANNED);
+			builder_push_status_code(&egress->presence.status_codes, STATUS_BANNED);
 			egress->type = 'u';
 		} else if (room->flags & MUC_FLAG_MEMBERSONLY &&
 				current_affected_participant->affiliation < AFFIL_MEMBER) {
-			builder_push_status_code(&egress->participant, STATUS_NONMEMBER_REMOVED);
+			builder_push_status_code(&egress->presence.status_codes, STATUS_NONMEMBER_REMOVED);
 			egress->type = 'u';
 		} else if (current_affected_participant->role == ROLE_NONE) {
-			builder_push_status_code(&egress->participant, STATUS_KICKED);
+			builder_push_status_code(&egress->presence.status_codes, STATUS_KICKED);
 			egress->type = 'u';
 		}
 
@@ -1540,11 +1557,11 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 
 		room_broadcast_presence(room, egress, &chunk->send, current_affected_participant);
 		if (current_affected_participant->role == ROLE_NONE) {
-			first_affected_participant = current_affected_participant->muc_admin_next_affected;
+			first_affected_participant = current_affected_participant->affected_list.next;
 			room_leave(room, current_affected_participant);
 			current_affected_participant = first_affected_participant;
 		} else {
-			current_affected_participant = current_affected_participant->muc_admin_next_affected;
+			current_affected_participant = current_affected_participant->affected_list.next;
 		}
 	}
 }

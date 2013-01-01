@@ -10,16 +10,12 @@
 #include "rooms.h"
 #include "room.h"
 
-#define MAX_STATUS_CODES 5
-
 typedef struct {
 	int affiliation, role;
-	Jid *jid;
+	Jid jid;
 	BufferPtr nick;
-	int status_codes[MAX_STATUS_CODES];
-	int status_codes_count;
-	BufferPtr destroy_node;
-} MucAdmNode;
+	BufferPtr reason_node;
+} MucAdminItem;
 
 typedef struct {
 	char code[4];
@@ -27,6 +23,13 @@ typedef struct {
 	char name[25];
 	char text[200];
 } XMPPError;
+
+#define MAX_STATUS_CODES 5
+
+typedef struct {
+	int codes[MAX_STATUS_CODES];
+	int size;
+} StatusCodes;
 
 #define BUILD_IQ_VERSION 1
 #define BUILD_IQ_LAST 2
@@ -61,7 +64,11 @@ typedef struct {
 		XMPPError *error;
 
 		// <presence>
-		MucAdmNode participant;
+		struct MucUserNode {
+			MucAdminItem item;
+			StatusCodes status_codes;
+			BufferPtr resume;
+		} presence;
 
 		// iq_type = BUILD_IQ_ROOM_DISCO_*, BUILD_IQ_ROOM_CONFIG
 		Room *room;
@@ -98,6 +105,6 @@ typedef struct {
 } BuilderBuffer;
 
 BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer);
-inline BOOL builder_push_status_code(MucAdmNode *, int);
+inline BOOL builder_push_status_code(StatusCodes *, int);
 
 #endif

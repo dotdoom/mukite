@@ -44,29 +44,36 @@
 #define BUF_PUSH_BOOL(value) \
 	{ if (value) { BUF_PUSH_LITERAL("1"); } else { BUF_PUSH_LITERAL("0"); } }
 
-BOOL build_presence_mucadm(MucAdmNode *node, BuilderBuffer *buffer) {
+BOOL build_presence_mucadm(struct MucUserNode *node, BuilderBuffer *buffer) {
 	int i, code, chunk_size;
 
 	BUF_PUSH_LITERAL("<x xmlns='http://jabber.org/protocol/muc#user'><item affiliation='");
-	BUF_PUSH(affiliation_names[node->affiliation], affiliation_name_sizes[node->affiliation]);
+	BUF_PUSH(affiliation_names[node->item.affiliation], affiliation_name_sizes[node->item.affiliation]);
 	BUF_PUSH_LITERAL("' role='");
-	BUF_PUSH(role_names[node->role], role_name_sizes[node->role]);
-	if (node->jid) {
+	BUF_PUSH(role_names[node->item.role], role_name_sizes[node->item.role]);
+	if (!JID_EMPTY(&node->item.jid)) {
 		BUF_PUSH_LITERAL("' jid='");
-		BUF_PUSH(JID_STR(node->jid), JID_LEN(node->jid));
+		BUF_PUSH(JID_STR(&node->item.jid), JID_LEN(&node->item.jid));
 	}
-	if (!BPT_NULL(&node->nick)) {
+	if (!BPT_NULL(&node->item.nick)) {
 		BUF_PUSH_LITERAL("' nick='");
-		BUF_PUSH_BPT(node->nick);
+		BUF_PUSH_BPT(node->item.nick);
 	}
 
-	for (i = 0; i < node->status_codes_count && (code = node->status_codes[i]); ++i) {
-		BUF_PUSH_LITERAL("'/><status code='");
-		BUF_PUSH_FMT("%d", code);
+	if (BPT_NULL(&node->item.reason_node)) {
+		BUF_PUSH_LITERAL("'/>");
+	} else {
+		BUF_PUSH_LITERAL("'>");
+		BUF_PUSH_BPT(node->item.reason_node);
+		BUF_PUSH_LITERAL("</item>");
 	}
 
-	BUF_PUSH_LITERAL("'/>");
-	BUF_PUSH_IFBPT(node->destroy_node);
+	for (i = 0; i < node->status_codes.size && (code = node->status_codes.codes[i]); ++i) {
+		BUF_PUSH_FMT("<status code='%d'/>", code);
+	}
+
+	BUF_PUSH_IFBPT(node->resume);
+
 	BUF_PUSH_LITERAL("</x>");
 	return TRUE;
 }
@@ -198,12 +205,12 @@ BOOL build_room_affiliations(BuilderBuffer *buffer, AffiliationEntry *aff, int a
 		BUF_PUSH_STR(affiliation_names[affiliation]);
 		BUF_PUSH_LITERAL("' jid='");
 		BUF_PUSH(JID_STR(&aff->jid), JID_LEN(&aff->jid));
-		if (!BUF_EMPTY(&aff->reason)) {
-			BUF_PUSH_LITERAL("'><reason>");
-			BUF_PUSH_BUF(aff->reason);
-			BUF_PUSH_LITERAL("</reason></item>");
-		} else {
+		if (BPT_NULL(&aff->reason_node)) {
 			BUF_PUSH_LITERAL("'><reason/></item>");
+		} else {
+			BUF_PUSH_LITERAL("'>");
+			BUF_PUSH_BPT(aff->reason_node);
+			BUF_PUSH_LITERAL("</item>");
 		}
 	}
 
@@ -417,7 +424,7 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 		}
 	} else {
 		if (packet->name == 'p') {
-			if (!build_presence_mucadm(&packet->participant, buffer)) {
+			if (!build_presence_mucadm(&packet->presence, buffer)) {
 				return FALSE;
 			}
 		} else if (packet->name == 'i') {
@@ -550,10 +557,10 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 	return TRUE;
 }
 
-BOOL builder_push_status_code(MucAdmNode *participant, int code) {
-	if (participant->status_codes_count >= MAX_STATUS_CODES) {
+BOOL builder_push_status_code(StatusCodes *codes, int code) {
+	if (codes->size >= MAX_STATUS_CODES) {
 		return FALSE;
 	}
-	participant->status_codes[participant->status_codes_count++] = code;
+	codes->codes[codes->size++] = code;
 	return TRUE;
 }

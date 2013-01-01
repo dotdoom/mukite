@@ -108,7 +108,7 @@ void *reader_thread_entry(void *void_config) {
 
 		LDEBUG("trying to parse stanza from the received buffer");
 		current_stanza = network_data.data;
-		while (xmlfsm_skip_node(&network_data, 0, &network_buffer) == XMLPARSE_SUCCESS) {
+		while (xmlfsm_skip_node(&network_data, &network_buffer) == XMLPARSE_SUCCESS) {
 			LDEBUG("received stanza: '%.*s<!-- ringbuffer rev split -->%.*s'",
 					(int)((current_stanza < network_data.data) ?
 						0 : network_data.data - network_buffer.data),

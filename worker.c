@@ -82,7 +82,7 @@ BOOL parse_incoming_packet(BufferPtr *buffer, IncomingPacket *packet) {
 	packet->header.end = buffer->data;
 
 	// Parse attrs
-	while ((retval = xmlfsm_get_attr(buffer, &attr)) == XMLPARSE_SUCCESS) {
+	while ((retval = xmlfsm_next_attr(buffer, &attr)) == XMLPARSE_SUCCESS) {
 		packet->header.end = buffer->data;
 		erase = 1;
 		if (BPT_EQ_LIT("from", &attr.name)) {
