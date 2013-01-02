@@ -581,17 +581,6 @@ static BOOL get_subject_node(BufferPtr *packet, BufferPtr *subject) {
 	return FALSE;
 }
 
-static void send_to_participants(RouterChunk *chunk, ParticipantEntry *participant, int limit) {
-	int sent = 0;
-	for (; participant && sent < limit; participant = participant->next, ++sent) {
-		LDEBUG("routing stanza to '%.*s', real JID '%.*s'",
-				BPT_SIZE(&participant->nick), participant->nick.data,
-				JID_LEN(&participant->jid), JID_STR(&participant->jid));
-		chunk->egress.to = participant->jid;
-		SEND(&chunk->send);
-	}
-}
-
 BOOL room_attach_config_status_codes(Room *room, StatusCodes *codes) {
 	if (!(room->flags & MUC_FLAG_SEMIANONYMOUS)) {
 		if (!builder_push_status_code(codes, STATUS_NON_ANONYMOUS)) {
@@ -790,7 +779,10 @@ static void route_message(Room *room, RouterChunk *chunk) {
 
 		router_cleanup(ingress);
 		history_push(&room->history, chunk, &sender->nick);
-		send_to_participants(chunk, room->participants.first, 1 << 30);
+		for (receiver = room->participants.first; receiver; receiver = receiver->next) {
+			egress->to = receiver->jid;
+			SEND(&chunk->send);
+		}
 	} else {
 		if (!(receiver = room_participant_by_nick(room, &ingress->proxy_to.resource))) {
 			router_error(chunk, &error_definitions[ERROR_RECIPIENT_NOT_IN_ROOM]);
@@ -811,7 +803,8 @@ static void route_message(Room *room, RouterChunk *chunk) {
 				BPT_SIZE(&receiver->nick), receiver->nick.data,
 				JID_LEN(&receiver->jid), JID_STR(&receiver->jid));
 		router_cleanup(ingress);
-		send_to_participants(chunk, receiver, 1);
+		egress->to = receiver->jid;
+		SEND(&chunk->send);
 	}
 }
 
@@ -1013,7 +1006,8 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 			} else {
 				jid_init(&egress->presence.item.jid);
 			}
-			send_to_participants(chunk, receiver, 1);
+			egress->to = receiver->jid;
+			SEND(&chunk->send);
 		}
 		sender = receiver;
 		just_joined = TRUE;
