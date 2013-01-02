@@ -4,6 +4,9 @@
 #include "xmcomp/logger.h"
 #include "router.h"
 #include "serializer.h"
+#ifdef MEWCATE
+#	include "mewcate.h"
+#endif
 
 #include "room.h"
 
@@ -157,8 +160,6 @@ static XMPPError error_definitions[] = {
 		.text = "You should specify a room nickname"
 	}
 };
-
-#define SEND(send) (send)->proc((send)->data)
 
 void room_init(Room *room, BufferPtr *node) {
 	memset(room, 0, sizeof(*room));
@@ -622,6 +623,11 @@ static BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallb
 		} else {
 			jid_init(&egress->presence.item.jid);
 		}
+#ifdef MEWCATE
+		if (!mewcate_handle(room, sender, receiver, egress, send)) {
+			continue;
+		}
+#endif
 		SEND(send);
 	}
 	return TRUE;
@@ -756,6 +762,12 @@ static void route_message(Room *room, RouterChunk *chunk) {
 		}
 		sender->last_message_time = chunk->config->timer_thread.ticks;
 
+#ifdef MEWCATE
+		if (!mewcate_handle(room, sender, 0, egress, &chunk->send)) {
+			return;
+		}
+#endif
+
 		if (get_subject_node(&ingress->inner, &new_subject)) {
 			if (sender->role < ROLE_MODERATOR &&
 					!(room->flags & MUC_FLAG_CHANGESUBJECT)) {
@@ -780,6 +792,11 @@ static void route_message(Room *room, RouterChunk *chunk) {
 		router_cleanup(ingress);
 		history_push(&room->history, chunk, &sender->nick);
 		for (receiver = room->participants.first; receiver; receiver = receiver->next) {
+#ifdef MEWCATE
+			if (!mewcate_handle(room, sender, receiver, egress, &chunk->send)) {
+				continue;
+			}
+#endif
 			egress->to = receiver->jid;
 			SEND(&chunk->send);
 		}
@@ -799,9 +816,12 @@ static void route_message(Room *room, RouterChunk *chunk) {
 			return;
 		}
 
-		LDEBUG("sending private message to '%.*s', real JID '%.*s'",
-				BPT_SIZE(&receiver->nick), receiver->nick.data,
-				JID_LEN(&receiver->jid), JID_STR(&receiver->jid));
+#ifdef MEWCATE
+		if (!mewcate_handle(room, sender, receiver, egress, &chunk->send)) {
+			return;
+		}
+#endif
+
 		router_cleanup(ingress);
 		egress->to = receiver->jid;
 		SEND(&chunk->send);
@@ -1317,6 +1337,11 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 			}
 		}
 
+#ifdef MEWCATE
+		if (!mewcate_handle(room, sender, receiver, egress, &chunk->send)) {
+			return;
+		}
+#endif
 		SEND(&chunk->send);
 		return;
 	}

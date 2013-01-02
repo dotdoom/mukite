@@ -103,7 +103,7 @@ void component_handle(RouterChunk *chunk) {
 				}
 
 				if (egress->iq_type) {
-					chunk->send.proc(chunk->send.data);
+					SEND(&chunk->send);
 					break;
 				} // TODO(artem): else send feature-not-implemented
 			}
@@ -151,6 +151,6 @@ void router_error(RouterChunk *chunk, XMPPError *error) {
 	egress->type = 'e';
 	egress->error = error;
 	egress->user_data = ingress->inner;
-	chunk->send.proc(chunk->send.data);
+	SEND(&chunk->send);
 	jid_destroy(&egress->to);
 }

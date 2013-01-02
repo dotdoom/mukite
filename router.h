@@ -26,6 +26,7 @@ typedef struct {
 	SendProc proc;
 	void *data;
 } SendCallback;
+#define SEND(send) (send)->proc((send)->data)
 
 typedef struct RouterChunk {
 	IncomingPacket ingress;

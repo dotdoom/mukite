@@ -1,5 +1,5 @@
 BARE_CFLAGS=-fPIC -O2 -Wall
-CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DLOG_POS -DLOG_PTHREAD -DLOG_CTIME
+CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DLOG_POS -DLOG_PTHREAD -DLOG_CTIME -DMEWCATE
 LDFLAGS=-pthread
 
 EXECUTABLE=mukite
@@ -14,7 +14,8 @@ SOURCES=$(EXECUTABLE).c \
 	acl.c \
 	config.c \
 	rooms.c \
-	room.c
+	room.c \
+	mewcate.c
 OBJECTS=$(SOURCES:.c=.o)
 
 all: $(EXECUTABLE)
