@@ -648,8 +648,8 @@ static void history_push(struct HistoryList *history, RouterChunk *chunk, Buffer
 	new_item = malloc(sizeof(*new_item));
 	memset(new_item, 0, sizeof(*new_item));
 	buffer_ptr_cpy(&new_item->nick, nick);
-	buffer_ptr_cpy(&new_item->header, &chunk->ingress.header);
-	buffer_ptr_cpy(&new_item->inner, &chunk->ingress.inner);
+	buffer_ptr_cpy(&new_item->header, &chunk->egress.header);
+	buffer_ptr_cpy(&new_item->inner, &chunk->egress.user_data);
 	new_item->delay = chunk->config->timer_thread.start +
 		chunk->config->timer_thread.ticks / TIMER_RESOLUTION;
 

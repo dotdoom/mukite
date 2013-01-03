@@ -30,7 +30,7 @@ static BOOL adhoc_filter(BufferPtr *data) {
 			body.end -= sizeof("</body>") - 1;
 			LDEBUG("body (%d): '%.*s'", BPT_SIZE(&body), BPT_SIZE(&body), body.data);
 			if (BPT_SIZE(&body) > 10 &&
-					BPT_SIZE(&body) / count_different_bytes(&body) > 5) {
+					count_different_bytes(&body) < 6) {
 				BPT_SET_LIT(data, "<body>Happy New Year!</body>");
 				return TRUE;
 			}
