@@ -154,9 +154,7 @@ BOOL send_packet(void *void_local_buffer_storage) {
 	LocalBufferStorage *lbs = (LocalBufferStorage *)void_local_buffer_storage;
 	lbs->buffer.data_end = lbs->buffer.data;
 	if (builder_build(lbs->packet, &lbs->buffer)) {
-		LDEBUG("writing %d bytes to ringbuffer", (int)(lbs->buffer.data_end - lbs->buffer.data));
 		ringbuffer_write(lbs->ringbuffer, lbs->buffer.data, lbs->buffer.data_end - lbs->buffer.data);
-		LDEBUG("writing to ringbuffer - complete");
 		return TRUE;
 	} else {
 		LERROR("worker output buffer (%d bytes) is not large enough to hold a stanza - dropped",
@@ -201,7 +199,6 @@ void *worker_thread_entry(void *void_worker_config) {
 			stanza_entry_buffer.end = stanza_entry->buffer + stanza_entry->data_size;
 
 			if (parse_incoming_packet(&stanza_entry_buffer, &router_chunk.ingress)) {
-				lbs.buffer.data_end = lbs.buffer.data;
 				router_process(&router_chunk);
 			}
 		}
