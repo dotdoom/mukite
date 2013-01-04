@@ -26,3 +26,7 @@ void *timer_thread_entry(void *void_timer_config) {
 		}
 	}
 }
+
+time_t timer_time(TimerConfig *timer) {
+	return timer->start + timer->ticks / TIMER_RESOLUTION;
+}

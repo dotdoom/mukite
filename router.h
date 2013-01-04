@@ -32,9 +32,7 @@ typedef struct RouterChunk {
 	IncomingPacket ingress;
 	SendCallback send;
 	Buffer hostname;
-	ACLConfig *acl;
 	BuilderPacket egress;
-	Config *config;
 } RouterChunk;
 
 void router_process(RouterChunk *);

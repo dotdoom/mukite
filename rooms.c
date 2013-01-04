@@ -125,7 +125,7 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
 
 void rooms_route(RouterChunk *chunk) {
 	Room *room = 0;
-	Rooms *rooms = &chunk->config->rooms;
+	Rooms *rooms = &config.rooms;
 	IncomingPacket *ingress = &chunk->ingress;
 	BuilderPacket *egress = &chunk->egress;
 
@@ -154,7 +154,7 @@ void rooms_route(RouterChunk *chunk) {
 			router_error(chunk, &error_definitions[ERROR_ROOM_NOT_FOUND]);
 			return;
 		} else {
-			if (acl_role(chunk->acl, &ingress->real_from) >= ACL_MUC_CREATE) {
+			if (acl_role(&config.acl_config, &ingress->real_from) >= ACL_MUC_CREATE) {
 				room = rooms_create_room(rooms, &ingress->proxy_to);
 			} else {
 				buffer__ptr_cpy(&egress->from_node, &ingress->proxy_to.node);

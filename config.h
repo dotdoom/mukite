@@ -69,9 +69,11 @@ typedef struct {
 	struct utsname uname;
 } Config;
 
-void config_init(Config *, char *filename);
-void config_destroy(Config *);
-BOOL config_read(Config *);
-void config_apply(Config *);
+extern Config config;
+
+void config_init(char *filename);
+void config_destroy();
+BOOL config_read();
+void config_apply();
 
 #endif

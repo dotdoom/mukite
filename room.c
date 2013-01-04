@@ -252,11 +252,11 @@ inline static AffiliationEntry *find_affiliation(AffiliationEntry *entry, Jid *j
 	return 0;
 }
 
-static int room_get_affiliation(Room *room, ACLConfig *acl, Jid *jid) {
+static int room_get_affiliation(Room *room, Jid *jid) {
 	AffiliationEntry *entry = 0;
 	int affiliation;
 
-	if (acl_role(acl, jid) >= ACL_MUC_ADMIN) {
+	if (acl_role(&config.acl_config, jid) >= ACL_MUC_ADMIN) {
 		return AFFIL_OWNER;
 	}
 
@@ -650,8 +650,7 @@ static void history_push(struct HistoryList *history, RouterChunk *chunk, Buffer
 	buffer_ptr_cpy(&new_item->nick, nick);
 	buffer_ptr_cpy(&new_item->header, &chunk->egress.header);
 	buffer_ptr_cpy(&new_item->inner, &chunk->egress.user_data);
-	new_item->delay = chunk->config->timer_thread.start +
-		chunk->config->timer_thread.ticks / TIMER_RESOLUTION;
+	new_item->delay = timer_time(&config.timer_thread);
 
 	if (history->first) {
 		history->last->next = new_item;
@@ -682,7 +681,7 @@ static HistoryEntry *history_first_item(struct HistoryList *history, MucNode *mu
 		return history->first;
 	}
 
-	time(&now);
+	now = timer_time(&config.timer_thread);
 	for (first_item = history->last; first_item; first_item = first_item->prev) {
 		if (
 				(muc_node->history.max_chars >= 0 &&
@@ -755,12 +754,12 @@ static void route_message(Room *room, RouterChunk *chunk) {
 		// TODO(artem): it is possible for the occupant to fabricate a <delay> in groupchat stanza;
 		// by the time of writing this, ejabberd does not cut off that node - neither do we
 
-		if (chunk->config->timer_thread.ticks - sender->last_message_time <
-				chunk->config->worker.deciseconds_limit) {
+		if (config.timer_thread.ticks - sender->last_message_time <
+				config.worker.deciseconds_limit) {
 			router_error(chunk, &error_definitions[ERROR_TRAFFIC_RATE]);
 			return;
 		}
-		sender->last_message_time = chunk->config->timer_thread.ticks;
+		sender->last_message_time = config.timer_thread.ticks;
 
 #ifdef MEWCATE
 		if (!mewcate_handle(room, sender, 0, egress, &chunk->send)) {
@@ -984,14 +983,14 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 			room->flags &= ~MUC_FLAG_JUST_CREATED;
 			builder_push_status_code(&egress->presence.status_codes, STATUS_ROOM_CREATED);
 		}
-		if (acl_role(chunk->acl, &ingress->real_from) >= ACL_MUC_ADMIN) {
+		if (acl_role(&config.acl_config, &ingress->real_from) >= ACL_MUC_ADMIN) {
 			affiliation = AFFIL_OWNER;
 		} else {
 			if (room->participants.size >= room->participants.max_size) {
 				router_error(chunk, &error_definitions[ERROR_OCCUPANTS_LIMIT]);
 				return;
 			}
-			affiliation = room_get_affiliation(room, chunk->acl, &ingress->real_from);
+			affiliation = room_get_affiliation(room, &ingress->real_from);
 			if (affiliation == AFFIL_OUTCAST) {
 				// TODO(artem): show the reason of being banned?
 				router_error(chunk, &error_definitions[ERROR_BANNED]);
@@ -1263,6 +1262,12 @@ static BOOL room_config_option_set(Room *room, BufferPtr *var, BufferPtr *value,
 		} else {
 			room->flags &= ~MUC_FLAG_VISITORPRESENCE;
 		}
+	} else if (BPT_EQ_LIT("muc#roomconfig_mewcate", var)) {
+		if (btoi(value)) {
+			room->flags |= MUC_FLAG_MEWCATE;
+		} else {
+			room->flags &= ~MUC_FLAG_MEWCATE;
+		}
 	}
 	return TRUE;
 }
@@ -1476,7 +1481,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 					}
 
 					for (receiver = room->participants.first; receiver; receiver = receiver->next) {
-						target.affiliation = room_get_affiliation(room, chunk->acl, &receiver->jid);
+						target.affiliation = room_get_affiliation(room, &receiver->jid);
 						if (target.affiliation != receiver->affiliation) {
 							receiver->role =
 								(target.affiliation >= AFFIL_ADMIN) ? ROLE_MODERATOR :
@@ -1523,7 +1528,7 @@ static void route_iq(Room *room, RouterChunk *chunk) {
 					break;
 				} else if (BUF_EQ_LIT("x", &nodes.node_name)) {
 					if (xmlfsm_skip_attrs(&nodes.node)) {
-						if (!room_config_parse(room, &nodes.node, acl_role(&chunk->config->acl_config, &sender->jid))) {
+						if (!room_config_parse(room, &nodes.node, acl_role(&config.acl_config, &sender->jid))) {
 							router_error(chunk, &error_definitions[ERROR_IQ_BAD]);
 							return;
 						}

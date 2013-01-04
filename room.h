@@ -78,6 +78,7 @@ typedef struct ParticipantEntry {
 #define MUC_FLAG_VISITORPRESENCE (1 << 13)
 #define MUC_FLAG_JUST_CREATED (1 << 14)
 #define MUC_FLAG_DESTROYED (1 << 15)
+#define MUC_FLAG_MEWCATE (1 << 16)
 
 #define MUC_FLAGS_DEFAULT (MUC_FLAG_ALLOWPM | \
 	MUC_FLAG_CHANGESUBJECT | \

@@ -12,12 +12,11 @@
 
 #define APP_NAME "mukite"
 
-Config config;
 BOOL running = TRUE;
 
 static void reload_config(int signal) {
-	config_read(&config);
-	config_apply(&config);
+	config_read();
+	config_apply();
 }
 
 static void save_data(int signal) {
@@ -73,9 +72,9 @@ int main(int argc, char **argv) {
 
 	LINFO("%s starting", APP_NAME);
 
-	config_init(&config, argc > 1 ? argv[1] : 0);
+	config_init(argc > 1 ? argv[1] : 0);
 	pthread_create(&config.timer_thread.thread, 0, timer_thread_entry, (void *)&config.timer_thread);
-	if (!config_read(&config)) {
+	if (!config_read()) {
 		return 1;
 	}
 
@@ -129,7 +128,7 @@ int main(int argc, char **argv) {
 		pthread_create(&config.reader_thread.thread, 0, reader_thread_entry, (void *)&config.reader_thread);
 
 		LINFO("creating worker threads");
-		config_apply(&config);
+		config_apply();
 
 		LINFO("started");
 		LDEBUG("joining reader thread");
@@ -151,7 +150,7 @@ int main(int argc, char **argv) {
 	ringbuffer_destroy(&config.writer_thread.ringbuffer);
 	queue_destroy(&config.reader_thread.queue);
 	free(writer_buffer);
-	config_destroy(&config);
+	config_destroy();
 
 	return 0;
 }

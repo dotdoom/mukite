@@ -8,7 +8,6 @@
 typedef struct {
 	BOOL enabled;
 	pthread_t thread;
-	void *global_config;
 } WorkerConfig;
 
 void *worker_thread_entry(void *void_worker_config);

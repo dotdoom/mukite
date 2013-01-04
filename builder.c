@@ -4,6 +4,8 @@
 
 #include "jid.h"
 #include "room.h"
+#include "config.h"
+#include "timer.h"
 
 #include "builder.h"
 
@@ -289,6 +291,8 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 			"muc#roomconfig_allowvisitorspm", BUF_PUSH_BOOL(room->flags & MUC_FLAG_VISITORSPM), );
 	BUF_PUSH_FIELD("boolean", "Allow visitors to send custom status and change nickname",
 			"muc#roomconfig_allowvisitorpresence", BUF_PUSH_BOOL(room->flags & MUC_FLAG_VISITORPRESENCE), );
+	BUF_PUSH_FIELD("boolean", "Enable built-in bot (MewCate)",
+			"muc#roomconfig_mewcate", BUF_PUSH_BOOL(room->flags & MUC_FLAG_MEWCATE), );
 	BUF_PUSH_LITERAL("</x>");
 
 	return TRUE;
@@ -315,7 +319,7 @@ BOOL build_iq_time(BuilderBuffer *buffer) {
 	char str_buffer[10];
 	int chunk_size;
 
-	time(&tm_t);
+	tm_t = timer_time(&config.timer_thread);
 	localtime_r(&tm_t, &tm);
 	if (strftime(str_buffer, sizeof(str_buffer), "%z", &tm) == 5) {
 		// +0300 => +03:00

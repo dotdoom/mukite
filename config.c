@@ -9,7 +9,7 @@
 
 #define READ_CONFIG(name, type, prefix) \
 	if (!strcmp(cfg_opt_name, #name)) { \
-		fscanf(file, type, prefix config->name); \
+		fscanf(file, type, prefix config.name); \
 	} else
 
 #define READ_CONFIG_STR(name) \
@@ -18,18 +18,20 @@
 #define READ_CONFIG_INT(name) \
 	READ_CONFIG(name, "%d", &)
 
-BOOL config_read(Config *config) {
+Config config;
+
+BOOL config_read() {
 	char cfg_opt_name[CONFIG_OPTION_LENGTH];
 	int error;
 	FILE *file = 0;
 
-	LINFO("loading configuration from '%s'", config->filename[0] ? config->filename : "stdin");
-	if (config->filename[0]) {
-		file = fopen(config->filename, "r");
+	LINFO("loading configuration from '%s'", config.filename[0] ? config.filename : "stdin");
+	if (config.filename[0]) {
+		file = fopen(config.filename, "r");
 		if (!file) {
 			error = errno;
 			LERRNO("could not open configuration file %s for reading",
-					error, config->filename);
+					error, config.filename);
 			return FALSE;
 		}
 	} else {
@@ -75,73 +77,72 @@ BOOL config_read(Config *config) {
 	return TRUE;
 }
 
-void config_init(Config *config, char *filename) {
-	memset(config, 0, sizeof(*config));
+void config_init(char *filename) {
+	memset(&config, 0, sizeof(config));
 	if (filename) {
-		strncpy(config->filename, filename, FILENAME_MAX);
+		strncpy(config.filename, filename, FILENAME_MAX);
 	}
-	acl_init(&config->acl_config);
+	acl_init(&config.acl_config);
 
 	// Some defaults
-	config->reader.block = 0;
-	config->reader.buffer = 1 << 20;
-	config->reader.queue = 1024;
-	config->writer.buffer = 1 << 20;
-	config->worker.threads = 3;
-	config->worker.buffer = 1 << 20;
-	config->worker.deciseconds_limit = 2;
-	rooms_init(&config->rooms);
-	uname(&config->uname);
+	config.reader.block = 0;
+	config.reader.buffer = 1 << 20;
+	config.reader.queue = 1024;
+	config.writer.buffer = 1 << 20;
+	config.worker.threads = 3;
+	config.worker.buffer = 1 << 20;
+	config.worker.deciseconds_limit = 2;
+	rooms_init(&config.rooms);
+	uname(&config.uname);
 }
 
-void config_destroy(Config *config) {
-	rooms_destroy(&config->rooms);
-	acl_destroy(&config->acl_config);
+void config_destroy() {
+	rooms_destroy(&config.rooms);
+	acl_destroy(&config.acl_config);
 }
 
-void config_apply(Config *config) {
+void config_apply() {
 	int i, error;
 	WorkerConfig *worker = 0;
 	FILE *acl_data_file = 0;
 
 	LDEBUG("applying configuration settings");
 
-	log_level = config->logger.level;
+	log_level = config.logger.level;
 
-	config->reader_thread.queue.fixed_block_buffer_size =
-		config->reader.block;
-	config->reader_thread.queue.network_buffer_size =
-		config->reader.buffer;
-	config->acl_config.default_role =
-		config->acl.default_role;
+	config.reader_thread.queue.fixed_block_buffer_size =
+		config.reader.block;
+	config.reader_thread.queue.network_buffer_size =
+		config.reader.buffer;
+	config.acl_config.default_role =
+		config.acl.default_role;
 
-	if (!(acl_data_file = fopen(config->acl.data_file, "r"))) {
+	if (!(acl_data_file = fopen(config.acl.data_file, "r"))) {
 		error = errno;
-		LERRNO("could not open acl data file '%s' for reading", error, config->acl.data_file);
+		LERRNO("could not open acl data file '%s' for reading", error, config.acl.data_file);
 	} else {
-		acl_deserialize(&config->acl_config, acl_data_file, MAX_ACLS);
+		acl_deserialize(&config.acl_config, acl_data_file, MAX_ACLS);
 		fclose(acl_data_file);
 	}
 
-	if (config->worker.threads > WORKERS_COUNT_LIMIT) {
+	if (config.worker.threads > WORKERS_COUNT_LIMIT) {
 		LERROR("%d exceeds workers limit %d, shrinking",
-				config->worker.threads, WORKERS_COUNT_LIMIT);
-		config->worker.threads = WORKERS_COUNT_LIMIT;
+				config.worker.threads, WORKERS_COUNT_LIMIT);
+		config.worker.threads = WORKERS_COUNT_LIMIT;
 	}
 
-	if (config->worker_threads.count < config->worker.threads) {
-		for (i = config->worker_threads.count; i < config->worker.threads; ++i) {
-			worker = &config->worker_threads.threads[i];
+	if (config.worker_threads.count < config.worker.threads) {
+		for (i = config.worker_threads.count; i < config.worker.threads; ++i) {
+			worker = &config.worker_threads.threads[i];
 			worker->enabled = TRUE;
-			worker->global_config = config;
 			pthread_create(&worker->thread, 0, worker_thread_entry, (void *)worker);
-			++config->worker_threads.count;
+			++config.worker_threads.count;
 		}
-	} else if (config->worker_threads.count > config->worker.threads) {
-		for (i = config->worker.threads; i < config->worker_threads.count; ++i) {
-			worker = &config->worker_threads.threads[i];
+	} else if (config.worker_threads.count > config.worker.threads) {
+		for (i = config.worker.threads; i < config.worker_threads.count; ++i) {
+			worker = &config.worker_threads.threads[i];
 			worker->enabled = FALSE;
-			--config->worker_threads.count;
+			--config.worker_threads.count;
 		}
 	}
 }

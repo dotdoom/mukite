@@ -13,5 +13,6 @@ typedef struct {
 } TimerConfig;
 
 void *timer_thread_entry(void *void_timer_config);
+time_t timer_time(TimerConfig *);
 
 #endif

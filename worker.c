@@ -167,9 +167,8 @@ BOOL send_packet(void *void_local_buffer_storage) {
 
 void *worker_thread_entry(void *void_worker_config) {
 	WorkerConfig *worker_config = (WorkerConfig *)void_worker_config;
-	Config *config = (Config *)worker_config->global_config;
-	StanzaQueue *queue = &config->reader_thread.queue;
-	int allocated_buffer_size = config->worker.buffer;
+	StanzaQueue *queue = &config.reader_thread.queue;
+	int allocated_buffer_size = config.worker.buffer;
 
 	StanzaEntry *stanza_entry;
 	BufferPtr stanza_entry_buffer;
@@ -178,23 +177,21 @@ void *worker_thread_entry(void *void_worker_config) {
 
 	router_chunk.send.proc = send_packet;
 	router_chunk.send.data = &lbs;
-	router_chunk.config = config;
-	router_chunk.acl = &config->acl_config;
-	router_chunk.hostname.data = config->component.hostname;
-	router_chunk.hostname.size = strlen(config->component.hostname);
+	router_chunk.hostname.data = config.component.hostname;
+	router_chunk.hostname.size = strlen(config.component.hostname);
 
 	lbs.buffer.data = malloc(allocated_buffer_size);
 	lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
-	lbs.ringbuffer = &config->writer_thread.ringbuffer;
+	lbs.ringbuffer = &config.writer_thread.ringbuffer;
 	lbs.packet = &router_chunk.egress;
 
 	LINFO("started");
 	sighelper_sigblockall(0);
 
 	while (worker_config->enabled) {
-		if (allocated_buffer_size != config->worker.buffer) {
+		if (allocated_buffer_size != config.worker.buffer) {
 			lbs.buffer.data = realloc(lbs.buffer.data,
-					allocated_buffer_size = config->worker.buffer);
+					allocated_buffer_size = config.worker.buffer);
 			lbs.buffer.end = lbs.buffer.data + allocated_buffer_size;
 		}
 
