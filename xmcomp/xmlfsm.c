@@ -4,9 +4,6 @@
 
 #include "xmlfsm.h"
 
-#define VALIDATE_END \
-	{ if (buffer->data == buffer->end) { return XMLPARSE_FAILURE; } }
-
 #define INC_UTF8(value, length) \
 	switch ((value) & 0xFC) { \
 		case 0xC0: length += 2; break; \
@@ -131,14 +128,11 @@ int xmlfsm_next_attr(BufferPtr *buffer, XmlAttr *attr) {
 }
 
 int xmlfsm_node_name(BufferPtr *buffer, Buffer *name) {
-	for (name->data = 0; *buffer->data != '<'; ++buffer->data) {
-		VALIDATE_END;
-	}
+	buffer->data = memchr(buffer->data, '<', BPT_SIZE(buffer));
 
 	for (name->data = ++buffer->data;
 			!WHITESPACE(*buffer->data) && *buffer->data != '>' && *buffer->data != '/';
 			++buffer->data) {
-		VALIDATE_END;
 	}
 	name->size = buffer->data - name->data;
 

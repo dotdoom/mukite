@@ -194,7 +194,7 @@ void *worker_thread_entry(void *void_worker_config) {
 		}
 
 		stanza_entry = queue_pop_data(queue);
-		if (stanza_entry->buffer) {
+		if (stanza_entry->buffer && stanza_entry->data_size) {
 			stanza_entry_buffer.data = stanza_entry->buffer;
 			stanza_entry_buffer.end = stanza_entry->buffer + stanza_entry->data_size;
 
