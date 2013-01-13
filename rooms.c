@@ -1,12 +1,12 @@
 #include <stdlib.h>
 
 #include "xmcomp/logger.h"
-#include "router.h"
+
 #include "serializer.h"
-
 #include "rooms.h"
+#include "builder.h"
 
-static XMPPError error_definitions[] = {
+/*static XMPPError error_definitions[] = {
 	{
 #define ERROR_ROOM_NOT_FOUND 0
 		.code = "405",
@@ -20,7 +20,7 @@ static XMPPError error_definitions[] = {
 		.type = "auth",
 		.text = "Room creation is denied by the service policy"
 	}
-};
+};*/
 
 void rooms_init(Rooms *rooms) {
 	rooms->first = rooms->last = 0;
@@ -123,11 +123,10 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input, int limit) {
 	return TRUE;
 }
 
-void rooms_route(RouterChunk *chunk) {
+/*void rooms_route(Rooms *rooms, IncomingPacket *ingress) {
 	Room *room = 0;
 	Rooms *rooms = &config.rooms;
-	IncomingPacket *ingress = &chunk->ingress;
-	BuilderPacket *egress = &chunk->egress;
+	BuilderPacket egress;
 
 	pthread_rwlock_rdlock(&rooms->sync);
 	LDEBUG("searching for the existing room '%.*s'",
@@ -174,4 +173,4 @@ void rooms_route(RouterChunk *chunk) {
 	if (room->flags & MUC_FLAG_DESTROYED) {
 		rooms_destroy_room(rooms, room);
 	}
-}
+}*/

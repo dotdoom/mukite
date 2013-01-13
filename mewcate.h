@@ -5,10 +5,9 @@
 
 #include "room.h"
 #include "builder.h"
-#include "router.h"
 
 BOOL mewcate_handle(Room *room,
 		ParticipantEntry *sender, ParticipantEntry *receiver,
-		BuilderPacket *egress, SendCallback *send);
+		BuilderPacket *egress);
 
 #endif

@@ -8,7 +8,8 @@ XMCOMP=xmcomp/xmcomp.o
 SOURCES=$(EXECUTABLE).c \
 	worker.c \
 	timer.c \
-	router.c \
+	component.c \
+	packet.c \
 	builder.c \
 	jid.c \
 	acl.c \

@@ -65,7 +65,7 @@ inline void ringbuffer_write(RingBuffer *ringbuffer, char *buffer, int size) {
 
 		pthread_cond_signal(&sync->data_available_cv);
 	}
-	++stats->reads;
+	++stats->writes;
 	pthread_mutex_unlock(&ringbuffer->sync.ringbuffer_mutex);
 }
 
@@ -91,6 +91,7 @@ inline int ringbuffer_get_chunk(RingBuffer *ringbuffer) {
 		pthread_cond_wait(&sync->data_available_cv, &sync->ringbuffer_mutex);
 		pthread_mutex_unlock(&sync->ringbuffer_mutex);
 	}
+	++stats->reads;
 
 	end_buffer_delta = ringbuffer->end - ringbuffer->read_position;
 	if (end_buffer_delta > ringbuffer->data_size) {

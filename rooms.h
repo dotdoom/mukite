@@ -6,6 +6,8 @@
 
 #include "room.h"
 #include "jid.h"
+#include "acl.h"
+#include "packet.h"
 
 #define MAX_REGISTERED_NICKS 10240
 
@@ -27,8 +29,7 @@ void rooms_destroy(Rooms *);
 
 Room *rooms_create(Rooms *, Jid *);
 
-struct RouterChunk;
-void rooms_route(struct RouterChunk *);
+void rooms_process(IncomingPacket *);
 
 BOOL rooms_serialize(Rooms *, FILE *);
 BOOL rooms_deserialize(Rooms *, FILE *, int);

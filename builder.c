@@ -80,42 +80,43 @@ BOOL build_presence_mucadm(struct MucUserNode *node, BuilderBuffer *buffer) {
 	return TRUE;
 }
 
-#define BUF_PUSH_STAT(category, value, units) \
-	BUF_PUSH_LITERAL("<stat name='" #category "/" #value "' units='" units "' value='"); \
-	BUF_PUSH_FMT("%d", data->iq_stats.category->value); \
+#define BUF_PUSH_STAT(name, value, units) \
+	BUF_PUSH_LITERAL("<stat name='" name "' units='" units "' value='"); \
+	BUF_PUSH_FMT("%d", value); \
 	BUF_PUSH_LITERAL("'/>");
 
 BOOL build_stats(BuilderBuffer *buffer, BuilderPacket *data) {
-	int chunk_size;
+/*	int chunk_size;
+	StanzaQueueStats *queue = &config.reader_thread.queue.stats;
+	RingBufferStats *ringbuffer = &config.writer_thread.ringbuffer.stats;
 
-	BUF_PUSH_STAT(rooms, size, "items");
-	BUF_PUSH_STAT(queue, overflows, "times");
-	BUF_PUSH_STAT(queue, underflows, "times");
-	BUF_PUSH_STAT(queue, realloc_enlarges, "times");
-	BUF_PUSH_STAT(queue, realloc_shortens, "times");
-	BUF_PUSH_STAT(queue, mallocs, "times");
-	BUF_PUSH_STAT(queue, data_pushes, "times");
-	BUF_PUSH_STAT(queue, data_pops, "times");
-	BUF_PUSH_STAT(queue, free_pushes, "times");
-	BUF_PUSH_STAT(queue, free_pops, "times");
-	BUF_PUSH_STAT(ringbuffer, underflows, "times");
-	BUF_PUSH_STAT(ringbuffer, overflows, "times");
-	BUF_PUSH_STAT(ringbuffer, reads, "times");
+	BUF_PUSH_STAT("rooms/count", config.rooms.size, "items");
+	BUF_PUSH_STAT("queue/overflows", queue->overflows, "times");
+	BUF_PUSH_STAT("queue/underflows", queue->underflows, "times");
+	BUF_PUSH_STAT("queue/realloc_enlarges", queue->realloc_enlarges, "times");
+	BUF_PUSH_STAT("queue/realloc_shortens", queue->realloc_shortens, "times");
+	BUF_PUSH_STAT("queue/mallocs", queue->mallocs, "times");
+	BUF_PUSH_STAT("queue/data_pushes", queue->data_pushes, "times");
+	BUF_PUSH_STAT("queue/data_pops", queue->data_pops, "times");
+	BUF_PUSH_STAT("queue/free_pushes", queue->free_pushes, "times");
+	BUF_PUSH_STAT("queue/free_pops", queue->free_pops, "times");
+	BUF_PUSH_STAT("ringbuffer/underflows", ringbuffer->underflows, "times");
+	BUF_PUSH_STAT("ringbuffer/overflows", ringbuffer->overflows, "times");
+	BUF_PUSH_STAT("ringbuffer/reads", ringbuffer->reads, "times");
+	BUF_PUSH_STAT("ringbuffer/writes", ringbuffer->writes, "times");
+	BUF_PUSH_STAT("time/uptime", config.timer_thread.ticks / TIMER_RESOLUTION, "seconds");*/
 
 	/*
 
-<stat name='time/uptime'/>
 <stat name='muc/users'/>
 <stat name='muc/jids'/>
-
-
-<stat name='time/uptime' unit='seconds' value='1024'/>
 	 */
 
 	return TRUE;
 }
 
-BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
+BOOL build_room_items(BuilderBuffer *buffer, Room *room) {
+/*
 	int chunk_size;
 	ParticipantEntry *participant = room->participants.first;
 
@@ -126,12 +127,12 @@ BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
 		BUF_PUSH_LITERAL("' jid='");
 		BUF_PUSH_BUF(room->node);
 		BUF_PUSH_LITERAL("@");
-		BUF_PUSH_BUF(*host);
+		BUF_PUSH_BPT(config.hostname);
 		BUF_PUSH_LITERAL("/");
 		BUF_PUSH_BPT(participant->nick);
 		BUF_PUSH_LITERAL("'/>");
 	}
-
+*/
 	return TRUE;
 }
 
@@ -142,7 +143,7 @@ BOOL build_room_items(BuilderBuffer *buffer, Room *room, Buffer *host) {
 		BUF_PUSH_LITERAL("<feature var='" if_false "'/>"); \
 	}
 
-BOOL build_room_info(BuilderBuffer *buffer, Room *room, Buffer *host) {
+BOOL build_room_info(BuilderBuffer *buffer, Room *room) {
 	int chunk_size;
 
 	LDEBUG("building room info");
@@ -168,13 +169,13 @@ BOOL build_room_info(BuilderBuffer *buffer, Room *room, Buffer *host) {
 	return TRUE;
 }
 
-BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
-	int chunk_size;
-	Room *room = rooms->first;
+BOOL build_component_items(BuilderBuffer *buffer) {
+/*	int chunk_size;
+	Room *room = config.rooms.first;
 
 	LDEBUG("building component items (list of rooms)");
 
-	pthread_rwlock_rdlock(&rooms->sync);
+	pthread_rwlock_rdlock(&config.rooms.sync);
 	for (; room; room = room->next) {
 		if (room->flags & MUC_FLAG_PUBLICROOM) {
 			BUF_PUSH_LITERAL("<item name='");
@@ -189,11 +190,11 @@ BOOL build_component_items(BuilderBuffer *buffer, Rooms *rooms, Buffer *host) {
 			BUF_PUSH_LITERAL("' jid='");
 			BUF_PUSH_BUF(room->node);
 			BUF_PUSH_LITERAL("@");
-			BUF_PUSH_BUF(*host);
+			BUF_PUSH_BPT(config.hostname);
 			BUF_PUSH_LITERAL("'/>");
 		}
 	}
-	pthread_rwlock_unlock(&rooms->sync);
+	pthread_rwlock_unlock(&config.rooms.sync);*/
 
 	return TRUE;
 }
@@ -298,7 +299,7 @@ BOOL build_room_config(BuilderBuffer *buffer, Room *room) {
 	return TRUE;
 }
 
-static BOOL build_strftime(BuilderBuffer *buffer, time_t *tm_t, BOOL utc_mark) {
+/*static BOOL build_strftime(BuilderBuffer *buffer, time_t *tm_t, BOOL utc_mark) {
 	int chunk_size;
 	struct tm tm;
 	gmtime_r(tm_t, &tm);
@@ -311,10 +312,10 @@ static BOOL build_strftime(BuilderBuffer *buffer, time_t *tm_t, BOOL utc_mark) {
 		BUF_PUSH_LITERAL("Z");
 	}
 	return TRUE;
-}
+}*/
 
 BOOL build_iq_time(BuilderBuffer *buffer) {
-	time_t tm_t;
+/*	time_t tm_t;
 	struct tm tm;
 	char str_buffer[10];
 	int chunk_size;
@@ -333,7 +334,7 @@ BOOL build_iq_time(BuilderBuffer *buffer) {
 	if (!build_strftime(buffer, &tm_t, TRUE)) {
 		return FALSE;
 	}
-	BUF_PUSH_LITERAL("</utc>");
+	BUF_PUSH_LITERAL("</utc>");*/
 	return TRUE;
 }
 
@@ -357,18 +358,18 @@ BOOL build_error(XMPPError *error, BuilderBuffer *buffer) {
 }
 
 BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
-	int chunk_size;
+/*	int chunk_size;
 
 	LDEBUG("building packet: started");
 
 	switch (packet->name) {
-		case 'm':
+		case STANZA_MESSAGE:
 			BUF_PUSH_LITERAL("<message");
 			break;
-		case 'p':
+		case STANZA_PRESENCE:
 			BUF_PUSH_LITERAL("<presence");
 			break;
-		case 'i':
+		case STANZA_IQ:
 			BUF_PUSH_LITERAL("<iq");
 			break;
 	}
@@ -376,43 +377,57 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 	BUF_PUSH_IFBPT(packet->header);
 	BUF_PUSH_LITERAL(" from='");
 	if (!BUF_NULL(&packet->from_node)) {
-		BUF_PUSH_BUF(packet->from_node);
+		BUF_PUSH_BPT(packet->from_node);
 		BUF_PUSH_LITERAL("@");
 	}
-	BUF_PUSH_BUF(packet->from_host);
+	BUF_PUSH_BPT(config.hostname);
 	if (!BUF_NULL(&packet->from_nick)) {
 		BUF_PUSH_LITERAL("/");
 		BUF_PUSH_BPT(packet->from_nick);
 	}
-	BUF_PUSH_LITERAL("' to='");
-	BUF_PUSH(JID_STR(&packet->to), JID_LEN(&packet->to));
+
+	if (!JID_EMPTY(&packet->to)) {
+		BUF_PUSH_LITERAL("' to='");
+		BUF_PUSH(JID_STR(&packet->to), JID_LEN(&packet->to));
+	}
 
 	if (packet->type) {
 		BUF_PUSH_LITERAL("' type='");
-		switch (packet->type) {
-			case 'g':
-				if (packet->name == 'm') {
-					BUF_PUSH_LITERAL("groupchat");
-				} else {
-					// iq
-					BUF_PUSH_LITERAL("get");
-				}
-				break;
-			case 'u':
-				BUF_PUSH_LITERAL("unavailable");
-				break;
-			case 'c':
-				BUF_PUSH_LITERAL("chat");
-				break;
-			case 'r':
-				BUF_PUSH_LITERAL("result");
-				break;
-			case 'e':
-				BUF_PUSH_LITERAL("error");
-				break;
-			case 's':
-				BUF_PUSH_LITERAL("set");
-				break;
+		if (packet->type == STANZA_ERROR) {
+			BUF_PUSH_LITERAL("error");
+		} else {
+			switch (packet->name) {
+				case STANZA_IQ:
+					switch (packet->type) {
+						case STANZA_IQ_GET:
+							BUF_PUSH_LITERAL("get");
+							break;
+						case STANZA_IQ_SET:
+							BUF_PUSH_LITERAL("set");
+							break;
+						case STANZA_IQ_RESULT:
+							BUF_PUSH_LITERAL("result");
+							break;
+					}
+					break;
+				case STANZA_MESSAGE:
+					switch (packet->type) {
+						case STANZA_MESSAGE_CHAT:
+							BUF_PUSH_LITERAL("chat");
+							break;
+						case STANZA_MESSAGE_GROUPCHAT:
+							BUF_PUSH_LITERAL("groupchat");
+							break;
+					}
+					break;
+				case STANZA_PRESENCE:
+					switch (packet->type) {
+						case STANZA_PRESENCE_UNAVAILABLE:
+							BUF_PUSH_LITERAL("unavailable");
+							break;
+					}
+					break;
+			}
 		}
 	}
 
@@ -422,16 +437,18 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 
 	BUF_PUSH_IFBPT(packet->user_data);
 
-	if (packet->type == 'e' && packet->error) {
-		if (!build_error(packet->error, buffer)) {
-			return FALSE;
-		}
-	} else {
-		if (packet->name == 'p') {
-			if (!build_presence_mucadm(&packet->presence, buffer)) {
+	if (packet->type == STANZA_ERROR) {
+		if (packet->sys_data.error) {
+			if (!build_error(packet->sys_data.error, buffer)) {
 				return FALSE;
 			}
-		} else if (packet->name == 'i') {
+		}
+	} else {
+		if (packet->name == STANZA_PRESENCE) {
+			if (!build_presence_mucadm(&packet->sys_data.presence, buffer)) {
+				return FALSE;
+			}
+		} else if (packet->name == STANZA_IQ) {
 			switch (packet->iq_type) {
 				case BUILD_IQ_EMPTY:
 					break;
@@ -441,16 +458,16 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 								"<name>Mukite http://mukite.org/</name>"
 								"<version>git</version>"
 								"<os>");
-					BUF_PUSH_STR(packet->uname->sysname);
+					BUF_PUSH_STR(config.uname.sysname);
 					BUF_PUSH_LITERAL("/");
-					BUF_PUSH_STR(packet->uname->machine);
+					BUF_PUSH_STR(config.uname.machine);
 					BUF_PUSH_LITERAL(" ");
-					BUF_PUSH_STR(packet->uname->release);
+					BUF_PUSH_STR(config.uname.release);
 					BUF_PUSH_LITERAL("</os></query>");
 					break;
 				case BUILD_IQ_LAST:
 					BUF_PUSH_LITERAL("<query xmlns='jabber:iq:last' seconds='");
-					BUF_PUSH_FMT("%.0f", packet->iq_last.seconds);
+					BUF_PUSH_FMT("%d", config.timer_thread.ticks / TIMER_RESOLUTION);
 					BUF_PUSH_LITERAL("'/>");
 					break;
 				case BUILD_IQ_TIME:
@@ -471,7 +488,7 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 				case BUILD_IQ_ROOM_DISCO_INFO:
 					BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#info'>");
 					if (packet->iq_type > BUILD_IQ_ROOM) {
-						if (!build_room_info(buffer, packet->room, &packet->from_host)) {
+						if (!build_room_info(buffer, packet->sys_data.room)) {
 							return FALSE;
 						}
 					} else {
@@ -491,11 +508,11 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 				case BUILD_IQ_ROOM_DISCO_ITEMS:
 					BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/disco#items'>");
 					if (packet->iq_type > BUILD_IQ_ROOM) {
-						if (!build_room_items(buffer, packet->room, &packet->from_host)) {
+						if (!build_room_items(buffer, packet->sys_data.room)) {
 							return FALSE;
 						}
 					} else {
-						if (!build_component_items(buffer, packet->rooms, &packet->from_host)) {
+						if (!build_component_items(buffer)) {
 							return FALSE;
 						}
 					}
@@ -503,14 +520,14 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 					break;
 				case BUILD_IQ_ROOM_AFFILIATIONS:
 					BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/muc#admin'>");
-					if (!build_room_affiliations(buffer, packet->muc_items.items, packet->muc_items.affiliation)) {
+					if (!build_room_affiliations(buffer, packet->sys_data.muc_items.items, packet->sys_data.muc_items.affiliation)) {
 						return FALSE;
 					}
 					BUF_PUSH_LITERAL("</query>");
 					break;
 				case BUILD_IQ_ROOM_CONFIG:
 					BUF_PUSH_LITERAL("<query xmlns='http://jabber.org/protocol/muc#owner'>");
-					if (!build_room_config(buffer, packet->room)) {
+					if (!build_room_config(buffer, packet->sys_data.room)) {
 						return FALSE;
 					}
 					BUF_PUSH_LITERAL("</query>");
@@ -528,11 +545,11 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 
 	if (packet->delay) {
 		BUF_PUSH_LITERAL("<delay xmlns='urn:xmpp:delay' from='");
-		if (!BUF_NULL(&packet->from_node)) {
-			BUF_PUSH_BUF(packet->from_node);
+		if (!BPT_NULL(&packet->from_node)) {
+			BUF_PUSH_BPT(packet->from_node);
 			BUF_PUSH_LITERAL("@");
 		}
-		BUF_PUSH_BUF(packet->from_host);
+		BUF_PUSH_BPT(config.hostname);
 		BUF_PUSH_LITERAL("' stamp='");
 		if (!build_strftime(buffer, &packet->delay, TRUE)) {
 			return FALSE;
@@ -545,18 +562,18 @@ BOOL builder_build(BuilderPacket *packet, BuilderBuffer *buffer) {
 	}
 
 	switch (packet->name) {
-		case 'm':
+		case STANZA_MESSAGE:
 			BUF_PUSH_LITERAL("</message>");
 			break;
-		case 'p':
+		case STANZA_PRESENCE:
 			BUF_PUSH_LITERAL("</presence>");
 			break;
-		case 'i':
+		case STANZA_IQ:
 			BUF_PUSH_LITERAL("</iq>");
 			break;
 	}
 
-	LDEBUG("building packet: finished");
+	LDEBUG("building packet: finished");*/
 
 	return TRUE;
 }

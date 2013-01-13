@@ -1,11 +1,19 @@
 #include <time.h>
+#include <pthread.h>
 
 #include "xmcomp/sighelper.h"
 
 #include "timer.h"
 
-void *timer_thread_entry(void *void_timer_config) {
-	TimerConfig *config = void_timer_config;
+#define TIMER_SYNC 600
+
+struct {
+	time_t start;
+	int ticks;
+	pthread_t thread;
+} timer_config;
+
+static void *timer_thread_entry(void *_unused) {
 	struct timespec rqtp = {
 		.tv_sec = 0,
 		.tv_nsec = 1000000000 / TIMER_RESOLUTION
@@ -14,19 +22,29 @@ void *timer_thread_entry(void *void_timer_config) {
 	int i;
 
 	sighelper_sigblockall(0);
-	time(&config->start);
-	config->ticks = 0;
+	time(&timer_config.start);
+	timer_config.ticks = 0;
 
 	while (1) {
 		time(&pivot_time);
-		config->ticks = difftime(pivot_time, config->start) * TIMER_RESOLUTION;
+		timer_config.ticks = difftime(pivot_time, timer_config.start) * TIMER_RESOLUTION;
 		for (i = 0; i < TIMER_SYNC; ++i) {
 			nanosleep(&rqtp, 0);
-			++config->ticks;
+			++timer_config.ticks;
 		}
 	}
+
+	return 0;
 }
 
-time_t timer_time(TimerConfig *timer) {
-	return timer->start + timer->ticks / TIMER_RESOLUTION;
+void timer_start() {
+	pthread_create(&timer_config.thread, 0, timer_thread_entry, 0);
+}
+
+inline time_t timer_time() {
+	return timer_config.start + timer_config.ticks / TIMER_RESOLUTION;
+}
+
+inline int timer_ticks() {
+	return timer_config.ticks;
 }

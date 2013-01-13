@@ -16,7 +16,7 @@ typedef struct {
 } RingBufferSync;
 
 typedef struct {
-	int overflows, underflows, reads;
+	int overflows, underflows, reads, writes;
 } RingBufferStats;
 
 typedef struct {

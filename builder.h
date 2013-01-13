@@ -47,12 +47,23 @@ typedef struct {
 #define BUILD_IQ_ROOM_AFFILIATIONS 23
 #define BUILD_IQ_ROOM_CONFIG 24
 
+#define STANZA_IQ 1
+#define STANZA_IQ_GET 1
+#define STANZA_IQ_SET 2
+#define STANZA_IQ_RESULT 3
+
+#define STANZA_MESSAGE 2
+#define STANZA_MESSAGE_CHAT 1
+#define STANZA_MESSAGE_GROUPCHAT 2
+
+#define STANZA_PRESENCE 3
+#define STANZA_PRESENCE_UNAVAILABLE 1
+
+#define STANZA_ERROR 100
+
 typedef struct {
-	Buffer from_node, from_host;
-	BufferPtr from_nick;
-
+	BufferPtr from_node, from_nick;
 	Jid to;
-
 	char name, type;
 
 	int iq_type;
@@ -72,32 +83,13 @@ typedef struct {
 
 		// iq_type = BUILD_IQ_ROOM_DISCO_*, BUILD_IQ_ROOM_CONFIG
 		Room *room;
-		
-		// iq_type = BUILD_IQ_LAST
-		struct {
-			double seconds;
-		} iq_last;
-
-		// iq_type = BUILD_IQ_STATS
-		struct {
-			BufferPtr request;
-			RingBufferStats *ringbuffer;
-			StanzaQueueStats *queue;
-			Rooms *rooms;
-		} iq_stats;
-		
-		// iq_type = BUILD_IQ_DISCO_*
-		Rooms *rooms;
 
 		// iq_type = BUILD_IQ_ROOM_AFFILIATIONS
 		struct {
 			int affiliation;
 			AffiliationEntry *items;
 		} muc_items;
-
-		// iq_type = BUILD_IQ_VERSION
-		struct utsname *uname;
-	};
+	} sys_data;
 } BuilderPacket;
 
 typedef struct {

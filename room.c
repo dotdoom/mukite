@@ -2,7 +2,6 @@
 #include <string.h>
 
 #include "xmcomp/logger.h"
-#include "router.h"
 #include "serializer.h"
 #ifdef MEWCATE
 #	include "mewcate.h"
@@ -252,11 +251,11 @@ inline static AffiliationEntry *find_affiliation(AffiliationEntry *entry, Jid *j
 	return 0;
 }
 
-static int room_get_affiliation(Room *room, Jid *jid) {
+static int room_get_affiliation(Room *room, ACLConfig *acl, Jid *jid) {
 	AffiliationEntry *entry = 0;
 	int affiliation;
 
-	if (acl_role(&config.acl_config, jid) >= ACL_MUC_ADMIN) {
+	if (acl_role(acl, jid) >= ACL_MUC_ADMIN) {
 		return AFFIL_OWNER;
 	}
 
@@ -598,13 +597,13 @@ BOOL room_attach_config_status_codes(Room *room, StatusCodes *codes) {
 	return TRUE;
 }
 
-static BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, SendCallback *send, ParticipantEntry *sender) {
-	int orig_status_codes_size = egress->presence.status_codes.size;
+static BOOL room_broadcast_presence(Room *room, BuilderPacket *egress, ParticipantEntry *sender) {
+	int orig_status_codes_size = egress->sys_data.presence.status_codes.size;
 	ParticipantEntry *receiver = room->participants.first;
 
 	egress->name = 'p';
 	egress->from_nick = sender->nick;
-	egress->presence.item.affiliation = sender->affiliation;
+	egress->sys_data.presence.item.affiliation = sender->affiliation;
 	egress->presence.item.role = sender->role;
 
 	for (; receiver; receiver = receiver->next) {
@@ -1033,8 +1032,9 @@ static void route_presence(Room *room, RouterChunk *chunk) {
 	}
 
 	if (sender->role > ROLE_VISITOR || room->flags & MUC_FLAG_VISITORPRESENCE) {
-		// Broadcast sender's presence to all participants
 		egress->user_data = ingress->inner;
+	} else {
+		BPT_INIT(&egress->user_data);
 	}
 	// TODO(artem): set role = none if type = unavailable
 	room_broadcast_presence(room, egress, &chunk->send, sender);

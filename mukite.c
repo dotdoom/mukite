@@ -7,58 +7,133 @@
 #include "xmcomp/network.h"
 #include "xmcomp/sighelper.h"
 #include "xmcomp/logger.h"
+#include "xmcomp/writer.h"
+#include "xmcomp/reader.h"
 
+#include "worker.h"
 #include "config.h"
+#include "acl.h"
+#include "timer.h"
 
-#define APP_NAME "mukite"
+#define WORKERS_SIZE_LIMIT 1024
+#define ROOMS_SIZE_LIMIT 10000
+#define ACLS_SIZE_LIMIT 1024
 
 BOOL running = TRUE;
 
-static void reload_config(int signal) {
-	config_read();
-	config_apply();
+WriterConfig writer_thread;
+ReaderConfig reader_thread;
+struct {
+	int size;
+	WorkerConfig threads[WORKERS_SIZE_LIMIT];
+} worker_threads;
+
+Config config;
+ACLConfig acl;
+Rooms rooms;
+
+static void apply_config() {
+	WorkerConfig *worker = 0;
+	FILE *acl_data_file = 0;
+	int i, error;
+
+	LDEBUG("applying configuration settings");
+
+	log_level = config.logger.level;
+
+	reader_thread.queue.fixed_block_buffer_size =
+		config.reader.block;
+	reader_thread.queue.network_buffer_size =
+		config.reader.buffer;
+
+	acl.default_role = config.acl.default_role;
+	if ((acl_data_file = fopen(config.acl.data_file, "r"))) {
+		acl_deserialize(&acl, acl_data_file, ACLS_SIZE_LIMIT);
+		fclose(acl_data_file);
+	} else {
+		error = errno;
+		LERRNO("could not open acl data file '%s' for reading, leaving ACLs untouched",
+				error, config.acl.data_file);
+	}
+
+	if (config.worker.threads > WORKERS_SIZE_LIMIT) {
+		LERROR("%d exceeds workers limit %d, shrinking",
+				config.worker.threads, WORKERS_SIZE_LIMIT);
+		config.worker.threads = WORKERS_SIZE_LIMIT;
+	}
+
+	if (worker_threads.size < config.worker.threads) {
+		for (i = worker_threads.size; i < config.worker.threads; ++i) {
+			worker = &worker_threads.threads[i];
+			worker->queue = &reader_thread.queue;
+			worker->ringbuffer = &writer_thread.ringbuffer;
+			worker->rooms = &rooms;
+			worker->acl = &acl;
+			worker->enabled = FALSE;
+		}
+	} else if (worker_threads.size > config.worker.threads) {
+		for (i = config.worker.threads; i < worker_threads.size; ++i) {
+			worker = &worker_threads.threads[i];
+			worker->enabled = FALSE;
+		}
+	}
+	worker_threads.size = config.worker.threads;
+
+	for (i = 0; i < worker_threads.size; ++i) {
+		worker = &worker_threads.threads[i];
+		worker->builder_buffer_size = config.worker.buffer;
+		worker->deciseconds_limit = config.worker.deciseconds_limit;
+		if (!worker->enabled) {
+			worker->enabled = TRUE;
+			pthread_create(&worker->thread, 0, worker_thread_entry, (void *)worker);
+		}
+	}
 }
 
-static void save_data(int signal) {
+static void reload_config(int signal) {
+	config_read(&config);
+	apply_config();
+}
+
+static void serialize_data(int signal) {
 	int error;
 	FILE *output = 0;
-	LINFO("received signal %d, saving to the file: '%s'", signal, config.worker.data_file);
+	LINFO("received signal %d, serializing to the file: '%s'", signal, config.worker.data_file);
 	if ((output = fopen(config.worker.data_file, "w"))) {
-		if (!rooms_serialize(&config.rooms, output)) {
+		if (!rooms_serialize(&rooms, output)) {
 			LERROR("serialization failure, probably disk error");
 		}
 		fclose(output);
 	} else {
 		error = errno;
-		LERRNO("failed to save data", error);
+		LERRNO("failed to open file for data serialization", error);
 	}
 }
 
-static void load_data() {
+static void deserialize_data() {
 	int error;
 	FILE *input = 0;
-	LINFO("loading from the file: '%s'", config.worker.data_file);
+	LINFO("deserializing from the file: '%s'", config.worker.data_file);
 	if ((input = fopen(config.worker.data_file, "r"))) {
-		if (!rooms_deserialize(&config.rooms, input, 10000)) {
+		if (!rooms_deserialize(&rooms, input, ROOMS_SIZE_LIMIT)) {
 			LFATAL("deserialization failure, probably disk error/version mismatch;\n"
 					"please rename or remove the data file to start from scratch");
 		}
 		fclose(input);
 	} else {
 		error = errno;
-		LERRNO("failed to load data", error);
+		LERRNO("failed to open file for data deserialization", error);
 	}
 }
 
 static void terminate(int signal) {
-	save_data(signal);
+	serialize_data(signal);
 	running = FALSE;
 
-	if (config.reader_thread.enabled) {
+	if (reader_thread.enabled) {
 		// SIGUSR2 the reader thread to interrupt the recv() call
-		config.reader_thread.enabled = FALSE;
-		pthread_kill(config.reader_thread.thread, SIGUSR2);
-
+		reader_thread.enabled = FALSE;
+		pthread_kill(reader_thread.thread, SIGUSR2);
 		// As soon as reader thread is terminated, main() terminates the writer thread and wraps up
 	}
 }
@@ -70,44 +145,49 @@ int main(int argc, char **argv) {
 	// RingBuffer buffer for the writer
 	char *writer_buffer = 0;
 
-	LINFO("%s starting", APP_NAME);
+	Socket socket;
 
-	config_init(argc > 1 ? argv[1] : 0);
-	pthread_create(&config.timer_thread.thread, 0, timer_thread_entry, (void *)&config.timer_thread);
-	if (!config_read()) {
+	LINFO("starting");
+	timer_start();
+	worker_establish_local_storage();
+
+	config_init(&config, argc > 1 ? argv[1] : 0);
+	if (!config_read(&config)) {
 		return 1;
 	}
 
-	load_data();
+	acl_init(&acl);
+	rooms_init(&rooms);
+	deserialize_data();
 
 	sighelper_sigaction(SIGHUP, reload_config);
-	sighelper_sigaction(SIGUSR1, save_data);
+	sighelper_sigaction(SIGUSR1, serialize_data);
 	sighelper_sigaction(SIGTERM, terminate);
 	sighelper_sigaction(SIGQUIT, terminate);
 	sighelper_sigaction(SIGINT, terminate);
 
 	LDEBUG("allocating writer buffer, size %d", config.writer.buffer);
 	writer_buffer = malloc(config.writer.buffer);
-	ringbuffer_init(&config.writer_thread.ringbuffer,
+	ringbuffer_init(&writer_thread.ringbuffer,
 			writer_buffer, config.writer.buffer);
 
 	LDEBUG("creating reader queue, size %d", config.reader.queue);
-	queue_init(&config.reader_thread.queue, config.reader.queue);
+	queue_init(&reader_thread.queue, config.reader.queue);
 
 	while (running) {
 		LINFO("connecting to %s:%d", config.network.host, config.network.port);
 
-		if (net_connect(&config.socket, config.network.host, config.network.port)) {
+		if (net_connect(&socket, config.network.host, config.network.port)) {
 			LINFO("opening XMPP stream to %s", config.component.hostname);
-			if (!net_stream(&config.socket,
+			if (!net_stream(&socket,
 						"xmcomp",
 						config.component.hostname,
 						config.component.password)) {
-				net_disconnect(&config.socket);
+				net_disconnect(&socket);
 			}
 		}
 
-		if (!config.socket.connected) {
+		if (!socket.connected) {
 			LERROR("retrying in %d second(s)", reconnect_delay);
 			sleep(reconnect_delay);
 			if (reconnect_delay < 60) {
@@ -117,40 +197,38 @@ int main(int argc, char **argv) {
 		}
 		reconnect_delay = 1;
 
+		apply_config();
+
 		LINFO("creating writer thread");
-		config.writer_thread.socket = &config.socket;
-		config.writer_thread.enabled = TRUE;
-		pthread_create(&config.writer_thread.thread, 0, writer_thread_entry, (void *)&config.writer_thread);
+		writer_thread.socket = &socket;
+		writer_thread.enabled = TRUE;
+		pthread_create(&writer_thread.thread, 0, writer_thread_entry, (void *)&writer_thread);
 
 		LINFO("creating reader thread");
-		config.reader_thread.socket = &config.socket;
-		config.reader_thread.enabled = TRUE;
-		pthread_create(&config.reader_thread.thread, 0, reader_thread_entry, (void *)&config.reader_thread);
-
-		LINFO("creating worker threads");
-		config_apply();
+		reader_thread.socket = &socket;
+		reader_thread.enabled = TRUE;
+		pthread_create(&reader_thread.thread, 0, reader_thread_entry, (void *)&reader_thread);
 
 		LINFO("started");
 		LDEBUG("joining reader thread");
-		pthread_join(config.reader_thread.thread, 0);
+		pthread_join(reader_thread.thread, 0);
 		// Switch ringbuffer to offline, indicating no more data is expected.
 		// As soon as the writer finishes the job, it will terminate
-		ringbuffer_offline(&config.writer_thread.ringbuffer);
+		ringbuffer_offline(&writer_thread.ringbuffer);
 		LDEBUG("joining writer thread");
-		pthread_join(config.writer_thread.thread, 0);
+		pthread_join(writer_thread.thread, 0);
 
 		LINFO("clearing output buffer and disconnecting");
-		ringbuffer_clear(&config.writer_thread.ringbuffer);
+		ringbuffer_clear(&writer_thread.ringbuffer);
 
-		net_unstream(&config.socket);
-		net_disconnect(&config.socket);
+		net_unstream(&socket);
+		net_disconnect(&socket);
 	}
 
 	LINFO("cleaning up");
-	ringbuffer_destroy(&config.writer_thread.ringbuffer);
-	queue_destroy(&config.reader_thread.queue);
+	ringbuffer_destroy(&writer_thread.ringbuffer);
+	queue_destroy(&reader_thread.queue);
 	free(writer_buffer);
-	config_destroy();
 
 	return 0;
 }
