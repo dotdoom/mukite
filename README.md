@@ -1,4 +1,4 @@
-Mukite is a multi-threaded (pthread) lightweight XMPP MUC component written in POSIX-compliant ANSI C with emphasis on performance and stability.
+Mukite is a multi-threaded (pthread) lightweight XMPP MUC component written in GNU C99 with emphasis on performance and stability.
 
 ## Requirements
 * GCC

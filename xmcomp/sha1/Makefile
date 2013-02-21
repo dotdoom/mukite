@@ -1,5 +1,6 @@
-all:
-	gcc -fPIC -O2 -c -Wall sha1.c -o sha1.o
+LIBRARY=sha1.o
+
+all: $(LIBRARY)
 
 clean:
-	rm -f sha1.o
+	rm -f $(LIBRARY)

@@ -1,19 +1,41 @@
-BARE_CFLAGS=-fPIC -O2 -Wall
-CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DLOG_POS -DLOG_PTHREAD -DLOG_CTIME
+SRCDIR:=src
+SOURCES:=$(addprefix $(SRCDIR)/, \
+	writer.c \
+	reader.c \
+	logger.c \
+	network.c \
+	xmlfsm.c \
+	queue.c \
+	ringbuffer.c \
+	sighelper.c \
+	buffer.c)
+OBJDIR:=obj
+OBJECTS:=$(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+BINDIR:=bin
+BINARY:=$(BINDIR)/xmcomp.o
+EXTLIB:=sha1/sha1.o
 
-SOURCES=writer.c reader.c logger.c network.c xmlfsm.c queue.c ringbuffer.c sighelper.c buffer.c
-OBJECTS=$(SOURCES:.c=.o)
-LIBRARY=xmcomp.o
-EXTLIB=sha1/sha1.o
+override CFLAGS+=-I. -I$(SRCDIR) -fPIC -Wall -std=gnu99 -DLOG_POS -DLOG_PTHREAD -DLOG_CTIME
 
-all: $(LIBRARY)
+all: release
+
+release:
+	$(MAKE) $(BINARY) CFLAGS='-O2 -march=native'
+
+debug:
+	$(MAKE) $(BINARY) CFLAGS='-g'
 	
-$(LIBRARY): $(OBJECTS) $(EXTLIB)
-	ld -r $(OBJECTS) $(EXTLIB) -o $(LIBRARY)
+$(BINARY): $(OBJECTS) $(EXTLIB)
+	mkdir -p $(BINDIR)
+	ld -r $(OBJECTS) $(EXTLIB) -o $(BINARY)
 
-sha1/sha1.o:
+$(OBJDIR)/%.o: $(SRCDIR)/%.c
+	mkdir -p $(OBJDIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(EXTLIB):
 	cd sha1 ; $(MAKE)
 
 clean:
 	cd sha1 ; $(MAKE) clean
-	rm -f $(OBJECTS) $(LIBRARY)
+	rm -rf $(BINDIR) $(OBJDIR)

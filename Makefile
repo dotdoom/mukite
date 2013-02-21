@@ -1,34 +1,51 @@
-BARE_CFLAGS=-fPIC -O2 -Wall
-CFLAGS:=$(CFLAGS) $(BARE_CFLAGS) -DLOG_POS -DLOG_PTHREAD -DLOG_CTIME -DMEWCATE
-LDFLAGS=-pthread
-
-EXECUTABLE=mukite
-
-XMCOMP=xmcomp/xmcomp.o
-SOURCES=$(EXECUTABLE).c \
-	worker.c \
-	timer.c \
-	component.c \
-	packet.c \
-	builder.c \
-	jid.c \
+SRCDIR:=src
+SOURCES:=$(addprefix $(SRCDIR)/, \
+	affiliation/affiliation.c \
+	affiliation/affiliations.c \
+	participant/participant.c \
+	participant/participants.c \
+	history_entry/history_entry.c \
+	history_entry/history_entries.c \
 	acl.c \
+	builder.c \
+	component.c \
 	config.c \
-	rooms.c \
-	room.c \
-	mewcate.c
-OBJECTS=$(SOURCES:.c=.o)
+	jid.c \
+	mewcat.c \
+	mukite.c \
+	packet.c \
+	room/room.c \
+	room/rooms.c \
+	timer.c \
+	worker.c)
+OBJDIR:=obj
+OBJECTS:=$(SOURCES:$(SRCDIR)/%.c=$(OBJDIR)/%.o)
+BINDIR:=bin
+BINARY:=$(BINDIR)/mukite
+EXTLIB:=xmcomp/bin/xmcomp.o
+LDFLAGS:=-pthread
 
-all: $(EXECUTABLE)
+override CFLAGS+=-I. -I$(SRCDIR) -fPIC -Wall -std=gnu99 -DLOG_POS -DLOG_PTHREAD -DLOG_CTIME
 
-$(EXECUTABLE): $(OBJECTS) $(XMCOMP)
+all: release
 
-$(XMCOMP):
+release:
+	$(MAKE) $(BINARY) CFLAGS='-O2 -march=native'
+
+debug:
+	$(MAKE) $(BINARY) CFLAGS='-g'
+	
+$(BINARY): $(OBJECTS) $(EXTLIB)
+	mkdir -p $(BINDIR)
+	ld -r $(OBJECTS) $(EXTLIB) -o $(BINARY)
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -I$(dir $<) -c $< -o $@
+
+$(EXTLIB):
 	cd xmcomp ; $(MAKE)
 
-clean_mukite:
-	rm -f $(OBJECTS)
-	rm -f $(EXECUTABLE)
-
-clean: clean_mukite
+clean:
 	cd xmcomp ; $(MAKE) clean
+	rm -rf $(BINDIR) $(OBJDIR)
