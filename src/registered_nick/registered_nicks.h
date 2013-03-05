@@ -10,8 +10,7 @@ typedef struct RegisteredNick {
 } RegisteredNick;
 
 typedef struct RegisteredNicksList {
-	int size, max_size;
-	RegisteredNick *head;
+	DLS_DECLARE(RegisteredNick)
 } RegisteredNicksList;
 
 #endif

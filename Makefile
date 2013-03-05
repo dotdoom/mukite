@@ -37,7 +37,7 @@ debug:
 	
 $(BINARY): $(OBJECTS) $(EXTLIB)
 	mkdir -p $(BINDIR)
-	ld -r $(OBJECTS) $(EXTLIB) -o $(BINARY)
+	$(CC) -pthread $(CFLAGS) $(OBJECTS) $(EXTLIB) -o $(BINARY)
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	mkdir -p $(dir $@)
