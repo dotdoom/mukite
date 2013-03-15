@@ -1,16 +1,15 @@
-#ifndef REGISTERED_NICK_H
-#define REGISTERED_NICK_H
+#ifndef REGISTERED_NICKS_H
+#define REGISTERED_NICKS_H
 
-#include "jid.h"
+#include "registered_nick.h"
 
-typedef struct RegisteredNick {
-	Jid jid;
-	Buffer nick;
-	struct RegisteredNick *next;
-} RegisteredNick;
+#define MAX_REGISTERED_NICKS 10240
 
 typedef struct RegisteredNicksList {
-	DLS_DECLARE(RegisteredNick)
+	DLS_DECLARE(RegisteredNick);
 } RegisteredNicksList;
+
+BOOL registered_nicks_serialize(RegisteredNicksList *, FILE *);
+BOOL registered_nicks_deserialize(RegisteredNicksList *, FILE *);
 
 #endif

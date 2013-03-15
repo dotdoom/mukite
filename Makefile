@@ -6,6 +6,8 @@ SOURCES:=$(addprefix $(SRCDIR)/, \
 	participant/participants.c \
 	history_entry/history_entry.c \
 	history_entry/history_entries.c \
+	registered_nick/registered_nick.c \
+	registered_nick/registered_nicks.c \
 	acl.c \
 	builder.c \
 	component.c \

@@ -6,12 +6,10 @@
 typedef struct RegisteredNick {
 	Jid jid;
 	Buffer nick;
-	struct RegisteredNick *next;
+	struct RegisteredNick *prev, *next;
 } RegisteredNick;
 
-typedef struct RegisteredNicksList {
-	int size, max_size;
-	RegisteredNick *head;
-} RegisteredNicksList;
+BOOL registered_nick_serialize(RegisteredNick *, FILE *);
+BOOL registered_nick_deserialize(RegisteredNick *, FILE *);
 
 #endif
