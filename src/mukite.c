@@ -117,6 +117,8 @@ static void deserialize_data() {
 	FILE *input = 0;
 	LINFO("deserializing from the file: '%s'", config.worker.data_file);
 	if ((input = fopen(config.worker.data_file, "r"))) {
+		rooms.max_size = 10240;
+		rooms.registered_nicks.max_size = 102400;
 		if (!rooms_deserialize(&rooms, input)) {
 			LFATAL("deserialization failure, probably disk error/version mismatch;\n"
 					"please rename or remove the data file to start from scratch");

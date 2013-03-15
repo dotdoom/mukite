@@ -4,9 +4,12 @@
 #include <string.h>
 
 #include "uthash/src/utlist.h"
+#include "uthash/src/uthash.h"
+#include "xmcomp/src/logger.h"
 
 #include "serializer.h"
 
+// TODO(artem): make sure these macros are used, not custom overrides.
 #define DLS_DECLARE(entry_type) \
 	entry_type *head; \
 	int size, max_size;
@@ -29,6 +32,7 @@
 		--(list)->size; \
 	}
 
+// TODO(artem): merge hash/list serializers, if possible.
 #define _L_SERIALIZE(iterator, list, element, properties) \
 	/* Write a mark that the list exists. */ \
 	if (!SERIALIZE_BASE((list)->head)) { \
@@ -82,36 +86,61 @@
 		LERROR("deserializer: cannot read list presence mark"); \
 		return FALSE; \
 	} \
-	if (!(list->head)) { \
+	if (!(list)->head) { \
 		LDEBUG("deserializer: the list is empty"); \
-		return TRUE; \
-	} \
-	(list)->head = element = 0; \
-	(list)->size = 0; \
-	do { \
-		if (++(list)->size > (list)->max_size) { \
-			LERROR("deserializer: list size limit %d exceeded, aborting", (list)->max_size); \
-			return FALSE; \
-		} \
-		if (element) { \
-			element->next = malloc(sizeof(*element)); \
-			memset(element->next, 0, sizeof(*element)); \
-			backref; \
-			element = element->next; \
-		} else { \
-			(list)->head = element = malloc(sizeof(*element)); \
-			memset(element, 0, sizeof(*element)); \
-		} \
-		if (!(properties) || !DESERIALIZE_BASE(element->next)) { \
-			LERROR("deserializer: cannot read list item %d", (list)->size); \
-			return FALSE; \
-		} \
-	} while (element->next);
+	} else { \
+		(list)->head = element = 0; \
+		(list)->size = 0; \
+		do { \
+			if (++(list)->size > (list)->max_size) { \
+				LERROR("deserializer: list size limit %d exceeded, aborting", (list)->max_size); \
+				return FALSE; \
+			} \
+			if (element) { \
+				element->next = malloc(sizeof(*element)); \
+				memset(element->next, 0, sizeof(*element)); \
+				backref; \
+				element = element->next; \
+			} else { \
+				(list)->head = element = malloc(sizeof(*element)); \
+				memset(element, 0, sizeof(*element)); \
+			} \
+			if (!(properties) || !DESERIALIZE_BASE(element->next)) { \
+				LERROR("deserializer: cannot read list item %d", (list)->size); \
+				return FALSE; \
+			} \
+		} while (element->next); \
+	}
 
 #define DLS_DESERIALIZE(list, element, properties) \
 	_L_DESERIALIZE(list, element, properties, element->next->prev = element)
 
-// TODO(artem): check that this one is used instead of custom implementation.
+#define _H_DESERIALIZE(hash, element, key, key_size, properties) \
+	{ \
+		void *__presence_mark__ = (void *)1; \
+		if (!DESERIALIZE_BASE((hash)->head)) { \
+			LERROR("deserializer: cannot read hash presence mark"); \
+			return FALSE; \
+		} \
+		if (!(hash)->head) { \
+			LDEBUG("deserializer: the hash is empty"); \
+		} else { \
+			(hash)->head = element = 0; \
+			(hash)->size = 0; \
+			do { \
+				if (++(hash)->size > (hash)->max_size) { \
+					LERROR("deserializer: hash size limit %d exceeded, aborting", (hash)->max_size); \
+					return FALSE; \
+				} \
+				if (!(properties) || !DESERIALIZE_BASE(__presence_mark__)) { \
+					LERROR("deserializer: cannot read hash item %d", (hash)->size); \
+					return FALSE; \
+				} \
+				HASH_ADD(hh, (hash)->head, key, key_size, element); \
+			} while (__presence_mark__); \
+		} \
+	}
+
 #define DLS_CLEAR(list, destructor, type) \
 	{ \
 		type *current = 0, *tmp = 0; \

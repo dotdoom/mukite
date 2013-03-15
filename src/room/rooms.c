@@ -73,20 +73,14 @@ BOOL rooms_serialize(Rooms *rooms, FILE *output) {
 }
 
 BOOL rooms_deserialize(Rooms *rooms, FILE *input) {
-	/*int entry_count = 0;
-	Room *new_entry = 0;
-	Room **list = &rooms->first;
 	LDEBUG("deserializing room list");
-	if (!registered_nicks_deserialize(&rooms->registered_nicks, input, MAX_REGISTERED_NICKS)) {
+	
+	if (!registered_nicks_deserialize(&rooms->registered_nicks, input)) {
 		return FALSE;
 	}
-	DESERIALIZE_LIST(
-		room_deserialize(new_entry, input),
 
-		new_entry->next->prev = new_entry
-	);
-	rooms->last = new_entry;
-	rooms->size = entry_count;*/
+	Room *current = 0;
+	_H_DESERIALIZE(rooms, current, node.data, current->node.size, room_deserialize(current, input));
 	return TRUE;
 }
 
