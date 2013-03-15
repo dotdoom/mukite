@@ -60,14 +60,15 @@ void rooms_destroy(Rooms *rooms) {
 }
 
 BOOL rooms_serialize(Rooms *rooms, FILE *output) {
-	/*Room *room = 0, *tmp = 0;
 	LDEBUG("serializing room list");
-	if (!registered_nicks_serialize(rooms->registered_nicks, output)) {
+	pthread_rwlock_rdlock(&rooms->sync);
+
+	if (!registered_nicks_serialize(&rooms->registered_nicks, output)) {
 		return FALSE;
 	}
-	HASH_ITER(hh, rooms->rooms, room, tmp) {
-		room_serialize(room, output);
-	}*/
+
+	Room *current = 0;
+	_H_SERIALIZE(rooms, current, Room, room_serialize(current, output));
 	return TRUE;
 }
 

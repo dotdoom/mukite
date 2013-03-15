@@ -8,19 +8,7 @@
 #include "jid.h"
 #include "acl.h"
 #include "packet.h"
-
-#define MAX_REGISTERED_NICKS 10240
-
-typedef struct RegisteredNick {
-	Jid jid;
-	Buffer nick;
-	struct RegisteredNick *next;
-} RegisteredNick;
-
-typedef struct RegisteredNicksList {
-	int size, max_size;
-	RegisteredNick *head;
-} RegisteredNicksList;
+#include "registered_nick/registered_nicks.h"
 
 typedef struct {
 	struct {
