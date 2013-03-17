@@ -1,5 +1,9 @@
-#ifndef DLS_LIST_H
-#define DLS_LIST_H
+#ifndef UT2S_H
+#define UT2S_H
+
+/*
+ * ut2s: utlist, uthash + size & serialization
+ */
 
 #include <string.h>
 
@@ -9,7 +13,6 @@
 
 #include "serializer.h"
 
-// TODO(artem): make sure these macros are used, not custom overrides.
 #define DLS_DECLARE(entry_type) \
 	entry_type *head; \
 	int size, max_size;
@@ -20,17 +23,31 @@
 		(list)->max_size = (limit); \
 	}
 
-#define DLS_PREPEND(list, element) \
+#define _DLS_EXPAND_WRAPPER(original, list, element) \
 	{ \
-		DL_PREPEND((list)->head, element); \
+		original((list)->head, element); \
 		++(list)->size; \
 	}
+
+#define DLS_PREPEND(list, element) _DLS_EXPAND_WRAPPER(DL_PREPEND, list, element)
+#define DLS_APPEND(list, element) _DLS_EXPAND_WRAPPER(DL_APPEND, list, element)
 
 #define DLS_DELETE(list, element) \
 	{ \
 		DL_DELETE((list)->head, (element)); \
 		--(list)->size; \
 	}
+
+#define DLS_CLEAR(list, destructor, type) \
+	{ \
+		type *current = 0, *tmp = 0; \
+		DL_FOREACH_SAFE((list)->head, current, tmp) { \
+			DLS_DELETE(list, current); \
+			free(destructor(current)); \
+		} \
+	}
+
+#define DLS_FOREACH(list, element) DL_FOREACH((list)->head, element)
 
 // TODO(artem): merge hash/list serializers, if possible.
 #define _L_SERIALIZE(iterator, list, element, properties) \
@@ -142,14 +159,20 @@
 		} \
 	}
 
-#define DLS_CLEAR(list, destructor, type) \
+#define HASHS_ITER(hash, element, tmp) HASH_ITER(hh, (hash)->head, element, tmp)
+
+#define HASHS_ADD(hash, key, key_size, element) \
 	{ \
-		type *current = 0, *tmp = 0; \
-		DL_FOREACH_SAFE((list)->head, current, tmp) { \
-			DL_DELETE((list)->head, current); \
-			free(destructor(current)); \
-		} \
-		(list)->size = 0; \
+		HASH_ADD(hh, (hash)->head, key, key_size, element); \
+		++(hash)->size; \
 	}
+
+#define HASHS_DEL(hash, element) \
+	{ \
+		HASH_DEL((hash)->head, element); \
+		--(hash)->size; \
+	}
+
+#define HASHS_FIND(hash, key, size, element) HASH_FIND(hh, (hash)->head, key, size, element)
 
 #endif

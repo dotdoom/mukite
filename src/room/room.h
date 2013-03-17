@@ -4,8 +4,6 @@
 #include <stdio.h>
 #include <pthread.h>
 
-#include "uthash/src/uthash.h"
-
 #include "xmcomp/src/buffer.h"
 
 #include "participant/participants.h"

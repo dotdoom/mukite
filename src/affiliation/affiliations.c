@@ -21,7 +21,7 @@ const int affiliation_name_sizes[] = {
 
 inline Affiliation *affiliations_find_by_jid(AffiliationsList *affiliations, Jid *jid, int mode) {
 	Affiliation *current = 0;
-	DL_FOREACH(affiliations->head, current) {
+	DLS_FOREACH(affiliations, current) {
 		if (!jid_cmp(&current->jid, jid, mode)) {
 			return current;
 		}
@@ -93,7 +93,7 @@ BOOL affiliationss_add(AffiliationsList **affiliations, Participant *sender, int
 			return FALSE;
 		}
 
-		DL_DELETE(affiliations[list]->head, affiliation_entry);
+		DLS_DELETE(affiliations[list], affiliation_entry);
 
 		if (affiliation == AFFIL_NONE) {
 			free(affiliation_destroy(affiliation_entry));
@@ -107,7 +107,7 @@ BOOL affiliationss_add(AffiliationsList **affiliations, Participant *sender, int
 		}
 		jid_set(&affiliation_entry->jid, jid, JID_NODE | JID_HOST);
 		affiliation_set_reason(affiliation_entry, reason_node);
-		DL_APPEND(affiliations[affiliation]->head, affiliation_entry);
+		DLS_APPEND(affiliations[affiliation], affiliation_entry);
 	}
 
 	LDEBUG("set affiliation of '%.*s' to %d",

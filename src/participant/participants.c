@@ -2,14 +2,14 @@
 
 #include "xmcomp/src/logger.h"
 
-#include "dls_list.h"
+#include "ut2s.h"
 
 #include "participants.h"
 
 Participant *participants_find_by_nick(ParticipantsList *list, BufferPtr *nick) {
 	int size = BPT_SIZE(nick);
 	Participant *current = 0;
-	DL_FOREACH(list->head, current) {
+	DLS_FOREACH(list, current) {
 		if (BPT_SIZE(&current->nick) == size &&
 				memcmp(current->nick.data, nick->data, size) == 0) {
 			return current;
@@ -28,10 +28,10 @@ Participant *participants_find_by_jid(ParticipantsList *list, Jid *jid) {
 		mode = JID_NODE | JID_HOST;
 		// FIXME(artem): when there are multiple joins from a single JID, this may fail
 		// we should probably create a cache of IDs for the queries
-	}    
+	}
 
 	Participant *current = 0; 
-	DL_FOREACH(list->head, current) {
+	DLS_FOREACH(list, current) {
 		if (!jid_cmp(&current->jid, jid, mode)) {
 			return current;
 		}

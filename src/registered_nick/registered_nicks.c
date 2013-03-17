@@ -1,6 +1,6 @@
 #include "xmcomp/src/logger.h"
 
-#include "dls_list.h"
+#include "ut2s.h"
 
 #include "registered_nicks.h"
 

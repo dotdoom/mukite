@@ -1,7 +1,5 @@
 #include <string.h>
 
-#include "uthash/src/utlist.h"
-
 #include "xmcomp/src/logger.h"
 
 #include "jid.h"
@@ -133,7 +131,7 @@ BOOL build_room_items(BuilderBuffer *buffer, Room *room, BufferPtr *hostname) {
 
 	LDEBUG("building room items");
 	Participant *current = 0;
-	DL_FOREACH(room->participants.head, current) {
+	DLS_FOREACH(&room->participants, current) {
 		BUF_PUSH_LITERAL("<item name='");
 		BUF_PUSH_BPT(current->nick);
 		BUF_PUSH_LITERAL("' jid='");

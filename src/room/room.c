@@ -1,8 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "uthash/src/utlist.h"
-
 #include "xmcomp/src/logger.h"
 
 #include "serializer.h"
@@ -317,7 +315,7 @@ static BOOL room_broadcast_presence(Room *room, Participant *sender, BufferPtr *
 	egress.sys_data.presence.item.reason_node = sender->affected_list.reason_node;
 
 	Participant *receiver = 0;
-	DL_FOREACH(room->participants.head, receiver) {
+	DLS_FOREACH(&room->participants, receiver) {
 		if (receiver == sender) {
 			egress.sys_data.presence.status_codes = room_config_status_codes(room) | STATUS_SELF_PRESENCE | status_codes;
 		} else {
@@ -473,7 +471,7 @@ static void route_message(Room *room, IncomingPacket *ingress, int deciseconds_l
 		history_entry_set_inner(history_entry, &egress.user_data);
 		// TODO(artem): set history_entry props
 		Participant *receiver = 0;
-		DL_FOREACH(room->participants.head, receiver) {
+		DLS_FOREACH(&room->participants, receiver) {
 			egress.to = receiver->jid;
 #ifdef MEWCAT
 			if (!mewcat_handle(room, sender, receiver, &egress)) {
@@ -518,7 +516,7 @@ static void room_presences_send(Room *room, Participant *receiver) {
 	};
 
 	Participant *sender = 0;
-	DL_FOREACH(room->participants.head, sender) {
+	DLS_FOREACH(&room->participants, sender) {
 		if (sender != receiver) {
 			egress.from_nick = sender->nick;
 			egress.sys_data.presence.item.affiliation = sender->affiliation;
@@ -1053,7 +1051,7 @@ static void route_iq(Room *room, IncomingPacket *ingress, ACLConfig *acl) {
 						return;
 					}
 
-					DL_FOREACH(room->participants.head, receiver) {
+					DLS_FOREACH(&room->participants, receiver) {
 						target.affiliation = affiliationss_get_by_jid((AffiliationsList **)room->affiliations, acl, &receiver->jid);
 						if (target.affiliation != receiver->affiliation) {
 							receiver->role =
@@ -1090,7 +1088,7 @@ static void route_iq(Room *room, IncomingPacket *ingress, ACLConfig *acl) {
 				if (BUF_EQ_LIT("destroy", &nodes.node_name)) {
 					room->flags |= MUC_FLAG_DESTROYED;
 					nodes.node.data = nodes.node_start;
-					DL_FOREACH(room->participants.head, receiver) {
+					DLS_FOREACH(&room->participants, receiver) {
 						receiver->role = ROLE_NONE;
 						receiver->affiliation = AFFIL_NONE;
 						egress.sys_data.presence.resume = nodes.node;
@@ -1108,7 +1106,7 @@ static void route_iq(Room *room, IncomingPacket *ingress, ACLConfig *acl) {
 					}
 					if (room->flags & MUC_FLAG_MEMBERSONLY) {
 						BPT_SET_LIT(&nodes.node, "<reason>Room policy switched to members-only</reason>");
-						DL_FOREACH(room->participants.head, receiver) {
+						DLS_FOREACH(&room->participants, receiver) {
 							if (receiver->affiliation < AFFIL_MEMBER) {
 								receiver->role = ROLE_NONE;
 								participant_set_affected(&first_affected_participant,

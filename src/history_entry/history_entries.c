@@ -1,6 +1,6 @@
 #include "xmcomp/src/logger.h"
 
-#include "dls_list.h"
+#include "ut2s.h"
 #include "builder.h"
 #include "timer.h"
 #include "history_entry/history_entry.h"
@@ -24,17 +24,17 @@ HistoryEntry *history_entries_push(HistoryEntriesList *history_entries) {
 
 	if (history_entries->max_size <= 0) { 
 		return 0;
-	}    
+	}
 
 	HistoryEntry *history_entry = 0;
 	if (history_entries->size < history_entries->max_size) {
 		history_entry = history_entry_init(malloc(sizeof(*history_entry)));
-		DL_APPEND(history_entries->head, history_entry);
+		DLS_APPEND(history_entries, history_entry);
 		++history_entries->size;
 	} else {
 		history_entry = history_entries->head;
-		DL_DELETE(history_entries->head, history_entry);
-		DL_APPEND(history_entries->head, history_entry);
+		DLS_DELETE(history_entries, history_entry);
+		DLS_APPEND(history_entries, history_entry);
 	}
 
 	return history_entry;
@@ -45,11 +45,11 @@ HistoryEntry *history_entries_push(HistoryEntriesList *history_entries) {
 			!history_entries->head) { 
 		// Shortcut.
 		return history->head;
-	}    
+	}
 
 	time_t now = timer_time();
 	HistoryEntry *current = 0;
-	DL_FOREACH(history_entries->head, current) {
+	DLS_FOREACH(history_entries->head, current) {
 		if (
 				(limit->max_chars >= 0 &&
 				 (limit->max_chars -= BPT_SIZE(&current->inner)) < 0) ||

@@ -1,7 +1,5 @@
 #include <stdlib.h>
 
-#include "uthash/src/uthash.h"
-
 #include "xmcomp/src/logger.h"
 
 #include "serializer.h"
@@ -36,7 +34,7 @@ Room *rooms_create_room(Rooms *rooms, BufferPtr *node) {
 	pthread_rwlock_wrlock(&rooms->sync);
 	Room *room = malloc(sizeof(*room));
 	room_init(room, node);
-	HASH_ADD(hh, rooms->head, node.data, BPT_SIZE(node), room);
+	HASHS_ADD(rooms, node.data, BPT_SIZE(node), room);
 	pthread_mutex_lock(&room->sync);
 	pthread_rwlock_unlock(&rooms->sync);
 
@@ -45,7 +43,7 @@ Room *rooms_create_room(Rooms *rooms, BufferPtr *node) {
 
 static void rooms_destroy_room(Rooms *rooms, Room *room) {
 	pthread_rwlock_wrlock(&rooms->sync);
-	HASH_DEL(rooms->head, room);
+	HASHS_DEL(rooms, room);
 	pthread_rwlock_unlock(&rooms->sync);
 
 	room_destroy(room);
@@ -53,7 +51,7 @@ static void rooms_destroy_room(Rooms *rooms, Room *room) {
 
 void rooms_destroy(Rooms *rooms) {
 	Room *room = 0, *tmp = 0;
-	HASH_ITER(hh, rooms->head, room, tmp) {
+	HASHS_ITER(rooms, room, tmp) {
 		rooms_destroy_room(rooms, room);
 	}
 	pthread_rwlock_destroy(&rooms->sync);
@@ -90,7 +88,7 @@ void rooms_process(Rooms *rooms, IncomingPacket *ingress, ACLConfig *acl) {
 
 	pthread_rwlock_rdlock(&rooms->sync);
 	Room *room = 0;
-	HASH_FIND(hh, rooms->head, ingress->proxy_to.node.data, BPT_SIZE(&ingress->proxy_to.node), room);
+	HASHS_FIND(rooms, ingress->proxy_to.node.data, BPT_SIZE(&ingress->proxy_to.node), room);
 	pthread_rwlock_unlock(&rooms->sync);
 
 	if (!room) {

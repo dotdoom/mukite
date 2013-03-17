@@ -1,7 +1,7 @@
 #ifndef PARTICIPANTS_H
 #define PARTICIPANTS_H
 
-#include "dls_list.h"
+#include "ut2s.h"
 
 #include "participant.h"
 
