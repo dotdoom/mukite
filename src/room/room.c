@@ -241,6 +241,9 @@ BOOL room_serialize(Room *room, FILE *output) {
 
 BOOL room_deserialize(Room *room, FILE *input) {
 	LDEBUG("deserializing room");
+	for (int affiliation = AFFIL_OUTCAST; affiliation <= AFFIL_OWNER; ++affiliation) {
+		room->affiliations[affiliation].max_size = 10240;
+	}
 	return
 		buffer_deserialize(&room->node, input, MAX_JID_PART_SIZE) &&
 		buffer_deserialize(&room->title, input, USER_STRING_OPTION_LIMIT) &&

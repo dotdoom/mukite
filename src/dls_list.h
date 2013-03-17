@@ -132,6 +132,7 @@
 					LERROR("deserializer: hash size limit %d exceeded, aborting", (hash)->max_size); \
 					return FALSE; \
 				} \
+				element = memset(malloc(sizeof(*element)), 0, sizeof(*element)); \
 				if (!(properties) || !DESERIALIZE_BASE(__presence_mark__)) { \
 					LERROR("deserializer: cannot read hash item %d", (hash)->size); \
 					return FALSE; \
