@@ -8,8 +8,7 @@
 #include "history_entries.h"
 
 BOOL history_entries_serialize(HistoryEntriesList *history_entries, FILE *output) {
-	HistoryEntry *current = 0;
-	DLS_SERIALIZE(history_entries, current, history_entry_serialize(current, output));
+	DLS_SERIALIZE(history_entries, HistoryEntry, history_entry_serialize);
 	return TRUE;
 }
 

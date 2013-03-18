@@ -41,9 +41,7 @@ Participant *participants_find_by_jid(ParticipantsList *list, Jid *jid) {
 }
 
 BOOL participants_serialize(ParticipantsList *participants, FILE *output) {
-	LDEBUG("serializing participant list");
-	Participant *current = 0;
-	DLS_SERIALIZE(participants, current, participant_serialize(current, output));
+	DLS_SERIALIZE(participants, Participant, participant_serialize);
 	return TRUE;
 }
 

@@ -59,14 +59,13 @@ void rooms_destroy(Rooms *rooms) {
 
 BOOL rooms_serialize(Rooms *rooms, FILE *output) {
 	LDEBUG("serializing room list");
-	pthread_rwlock_rdlock(&rooms->sync);
+	//pthread_rwlock_rdlock(&rooms->sync);
 
 	if (!registered_nicks_serialize(&rooms->registered_nicks, output)) {
 		return FALSE;
 	}
 
-	Room *current = 0;
-	_H_SERIALIZE(rooms, current, Room, room_serialize(current, output));
+	HASHS_SERIALIZE(rooms, Room, room_serialize);
 	return TRUE;
 }
 
@@ -78,7 +77,7 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input) {
 	}
 
 	Room *current = 0;
-	_H_DESERIALIZE(rooms, current, node.data, current->node.size, room_deserialize(current, input));
+	HASHS_DESERIALIZE(rooms, current, node.data, current->node.size, room_deserialize(current, input));
 	return TRUE;
 }
 

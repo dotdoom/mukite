@@ -4,10 +4,8 @@
 
 #include "registered_nicks.h"
 
-BOOL registered_nicks_serialize(RegisteredNicksList *list, FILE *output) {
-	LDEBUG("serializing registered nicks");
-	RegisteredNick *current = 0;
-	DLS_SERIALIZE(list, current, registered_nick_serialize(current, output));
+BOOL registered_nicks_serialize(RegisteredNicksList *registered_nicks, FILE *output) {
+	DLS_SERIALIZE(registered_nicks, RegisteredNick, registered_nick_serialize);
 	return TRUE;
 }
 

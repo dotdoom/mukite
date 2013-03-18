@@ -51,9 +51,8 @@ int affiliationss_get_by_jid(AffiliationsList **affiliations, ACLConfig *acl, Ji
 	return AFFIL_NONE;
 }
 
-BOOL affiliations_serialize(AffiliationsList *list, FILE *output) {
-	Affiliation *current = 0;
-	DLS_SERIALIZE(list, current, affiliation_serialize(current, output));
+BOOL affiliations_serialize(AffiliationsList *affiliations, FILE *output) {
+	DLS_SERIALIZE(affiliations, Affiliation, affiliation_serialize);
 	return TRUE;
 }
 
