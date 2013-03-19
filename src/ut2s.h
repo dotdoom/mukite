@@ -81,39 +81,38 @@
 #define HASHS_SERIALIZE(hash, type, entry_serializer) \
 	_CONTAINER_SERIALIZE(hash, type *__tmp__ = 0; HASHS_ITER(hash, __current__, __tmp__), type, entry_serializer)
 
-#define _L_DESERIALIZE(list, element, properties, backref) \
-	if (!DESERIALIZE_BASE((list)->head)) { \
-		LERROR("deserializer: cannot read list presence mark"); \
-		return FALSE; \
-	} \
-	if (!(list)->head) { \
-		LDEBUG("deserializer: the list is empty"); \
-	} else { \
-		(list)->head = element = 0; \
-		(list)->size = 0; \
-		do { \
-			if (++(list)->size > (list)->max_size) { \
-				LERROR("deserializer: list size limit %d exceeded, aborting", (list)->max_size); \
-				return FALSE; \
-			} \
-			if (element) { \
-				element->next = malloc(sizeof(*element)); \
-				memset(element->next, 0, sizeof(*element)); \
-				backref; \
-				element = element->next; \
-			} else { \
-				(list)->head = element = malloc(sizeof(*element)); \
-				memset(element, 0, sizeof(*element)); \
-			} \
-			if (!(properties) || !DESERIALIZE_BASE(element->next)) { \
-				LERROR("deserializer: cannot read list item %d", (list)->size); \
-				return FALSE; \
-			} \
-		} while (element->next); \
+#define _CONTAINER_DESERIALIZE(container, setter, type, entry_deserializer) \
+	{ \
+		LDEBUG("deserializer: starting Container<" #type ">."); \
+		void *__presence_mark__ = 0; \
+		if (!DESERIALIZE_BASE(__presence_mark__)) { \
+			LERROR("deserializer: cannot read container presence mark."); \
+			return FALSE; \
+		} \
+		if (!__presence_mark__) { \
+			LDEBUG("deserializer: the container is empty."); \
+		} else { \
+			type *__current__ = 0; \
+			(container)->head = 0; \
+			do { \
+				/* TODO(artem): max_size*2 is a hack around failed serializations */ \
+				if (++(container)->size > (container)->max_size*2) { \
+					LERROR("deserializer: container size limit %d exceeded, aborting.", (container)->max_size); \
+					return FALSE; \
+				} \
+				__current__ = memset(malloc(sizeof(*__current__)), 0, sizeof(*__current__)); \
+				if (!(entry_deserializer(__current__, input)) || !DESERIALIZE_BASE(__presence_mark__)) { \
+					LERROR("deserializer: cannot read container item %d.", (container)->size); \
+					return FALSE; \
+				} \
+				setter((container), __current__); \
+			} while (__presence_mark__); \
+			LDEBUG("deserializer: finished Container<" #type ">, total %d items.", (container)->size); \
+		} \
 	}
 
-#define DLS_DESERIALIZE(list, element, properties) \
-	_L_DESERIALIZE(list, element, properties, element->next->prev = element)
+#define DLS_DESERIALIZE(list, type, entry_deserializer) \
+	_CONTAINER_DESERIALIZE(list, DLS_APPEND, type, entry_deserializer)
 
 #define HASHS_DESERIALIZE(hash, element, key, key_size, properties) \
 	{ \

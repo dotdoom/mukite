@@ -9,9 +9,7 @@ BOOL registered_nicks_serialize(RegisteredNicksList *registered_nicks, FILE *out
 	return TRUE;
 }
 
-BOOL registered_nicks_deserialize(RegisteredNicksList *list, FILE *input) {
-	LDEBUG("deserializing registered nicks");
-	RegisteredNick *current = 0;
-	DLS_DESERIALIZE(list, current, registered_nick_deserialize(current, input));
+BOOL registered_nicks_deserialize(RegisteredNicksList *registered_nicks, FILE *input) {
+	DLS_DESERIALIZE(registered_nicks, RegisteredNick, registered_nick_deserialize);
 	return TRUE;
 }

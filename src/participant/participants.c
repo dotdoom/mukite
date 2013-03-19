@@ -46,8 +46,6 @@ BOOL participants_serialize(ParticipantsList *participants, FILE *output) {
 }
 
 BOOL participants_deserialize(ParticipantsList *participants, FILE *input) {
-	LDEBUG("deserializing participant list");
-	Participant *current = 0;
-	DLS_DESERIALIZE(participants, current, participant_deserialize(current, input));
+	DLS_DESERIALIZE(participants, Participant, participant_deserialize);
 	return TRUE;
 }

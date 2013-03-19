@@ -13,8 +13,7 @@ BOOL history_entries_serialize(HistoryEntriesList *history_entries, FILE *output
 }
 
 BOOL history_entries_deserialize(HistoryEntriesList *history_entries, FILE *input) {
-	HistoryEntry *current = 0;
-	DLS_DESERIALIZE(history_entries, current, history_entry_deserialize(current, input));
+	DLS_DESERIALIZE(history_entries, HistoryEntry, history_entry_deserialize);
 	return TRUE;
 }
 

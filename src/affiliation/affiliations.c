@@ -56,9 +56,8 @@ BOOL affiliations_serialize(AffiliationsList *affiliations, FILE *output) {
 	return TRUE;
 }
 
-BOOL affiliations_deserialize(AffiliationsList *list, FILE *input) {
-	Affiliation *current = 0;
-	DLS_DESERIALIZE(list, current, affiliation_deserialize(current, input));
+BOOL affiliations_deserialize(AffiliationsList *affiliations, FILE *input) {
+	DLS_DESERIALIZE(affiliations, Affiliation, affiliation_deserialize);
 	return TRUE;
 }
 

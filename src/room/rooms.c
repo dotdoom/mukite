@@ -70,8 +70,6 @@ BOOL rooms_serialize(Rooms *rooms, FILE *output) {
 }
 
 BOOL rooms_deserialize(Rooms *rooms, FILE *input) {
-	LDEBUG("deserializing room list");
-	
 	if (!registered_nicks_deserialize(&rooms->registered_nicks, input)) {
 		return FALSE;
 	}
