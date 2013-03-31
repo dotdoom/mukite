@@ -2,7 +2,7 @@
 #define UT2S_H
 
 /*
- * ut2s: utlist, uthash + size & serialization
+ * utss: utlist, uthash + size & serialization
  */
 
 #include <string.h>
@@ -94,6 +94,7 @@
 		} else { \
 			type *__current__ = 0; \
 			(container)->head = 0; \
+			(container)->size = 0; \
 			do { \
 				/* TODO(artem): max_size*2 is a hack around failed serializations */ \
 				if (++(container)->size > (container)->max_size*2) { \
@@ -105,41 +106,17 @@
 					LERROR("deserializer: cannot read container item %d.", (container)->size); \
 					return FALSE; \
 				} \
-				setter((container), __current__); \
+				setter; \
 			} while (__presence_mark__); \
 			LDEBUG("deserializer: finished Container<" #type ">, total %d items.", (container)->size); \
 		} \
 	}
 
 #define DLS_DESERIALIZE(list, type, entry_deserializer) \
-	_CONTAINER_DESERIALIZE(list, DLS_APPEND, type, entry_deserializer)
+	_CONTAINER_DESERIALIZE(list, DLS_APPEND((list), __current__), type, entry_deserializer)
 
-#define HASHS_DESERIALIZE(hash, element, key, key_size, properties) \
-	{ \
-		void *__presence_mark__ = (void *)1; \
-		if (!DESERIALIZE_BASE((hash)->head)) { \
-			LERROR("deserializer: cannot read hash presence mark"); \
-			return FALSE; \
-		} \
-		if (!(hash)->head) { \
-			LDEBUG("deserializer: the hash is empty"); \
-		} else { \
-			(hash)->head = element = 0; \
-			(hash)->size = 0; \
-			do { \
-				if (++(hash)->size > (hash)->max_size) { \
-					LERROR("deserializer: hash size limit %d exceeded, aborting", (hash)->max_size); \
-					return FALSE; \
-				} \
-				element = memset(malloc(sizeof(*element)), 0, sizeof(*element)); \
-				if (!(properties) || !DESERIALIZE_BASE(__presence_mark__)) { \
-					LERROR("deserializer: cannot read hash item %d", (hash)->size); \
-					return FALSE; \
-				} \
-				HASH_ADD(hh, (hash)->head, key, key_size, element); \
-			} while (__presence_mark__); \
-		} \
-	}
+#define HASHS_DESERIALIZE(hash, type, key, key_size, entry_deserializer) \
+	_CONTAINER_DESERIALIZE(hash, HASHS_ADD((hash), key, __current__->key_size, __current__), type, entry_deserializer)
 
 #define HASHS_ITER(hash, element, tmp) HASH_ITER(hh, (hash)->head, element, tmp)
 

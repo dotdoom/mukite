@@ -1,7 +1,7 @@
 #ifndef PARTICIPANTS_H
 #define PARTICIPANTS_H
 
-#include "ut2s.h"
+#include "utss.h"
 
 #include "participant.h"
 

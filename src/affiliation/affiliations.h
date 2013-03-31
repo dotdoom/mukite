@@ -1,7 +1,7 @@
 #ifndef AFFILIATIONS_H
 #define AFFILIATIONS_H
 
-#include "ut2s.h"
+#include "utss.h"
 #include "acl.h"
 #include "participant/participant.h"
 #include "affiliation.h"

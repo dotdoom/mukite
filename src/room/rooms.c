@@ -74,8 +74,7 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input) {
 		return FALSE;
 	}
 
-	Room *current = 0;
-	HASHS_DESERIALIZE(rooms, current, node.data, current->node.size, room_deserialize(current, input));
+	HASHS_DESERIALIZE(rooms, Room, node.data, node.size, room_deserialize);
 	return TRUE;
 }
 
