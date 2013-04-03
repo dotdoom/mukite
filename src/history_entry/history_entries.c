@@ -18,13 +18,17 @@ BOOL history_entries_deserialize(HistoryEntriesList *history_entries, FILE *inpu
 }
 
 HistoryEntry *history_entries_push(HistoryEntriesList *history_entries) {
-	// TODO(artem): remove history items if the size exceeds max_size (max_size has been decreased).
+	HistoryEntry *history_entry = 0;
+	while (history_entries->max_size > history_entries->size) {
+		// Remove old extra history items (max_size has been decreased).
+		history_entry = history_entries->head;
+		DLS_DELETE(history_entries, history_entry);
+	}
 
-	if (history_entries->max_size <= 0) { 
+	if (history_entries->max_size == 0) {
 		return 0;
 	}
 
-	HistoryEntry *history_entry = 0;
 	if (history_entries->size < history_entries->max_size) {
 		history_entry = history_entry_init(malloc(sizeof(*history_entry)));
 		DLS_APPEND(history_entries, history_entry);
