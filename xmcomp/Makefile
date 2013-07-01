@@ -34,8 +34,8 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(EXTLIB):
-	cd sha1 ; $(MAKE)
+	$(MAKE) -C sha1
 
 clean:
-	cd sha1 ; $(MAKE) clean
+	$(MAKE) -C sha1 clean
 	rm -rf $(BINDIR) $(OBJDIR)

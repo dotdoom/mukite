@@ -301,12 +301,15 @@ static BOOL room_broadcast_presence(Room *room, Participant *sender, BufferPtr *
 	BuilderPacket egress = {};
 
 	egress.name = STANZA_PRESENCE;
-	if (sender->role == ROLE_NONE || status_codes & STATUS_NICKNAME_CHANGED) {
+
+	if (sender->role == ROLE_NONE || (status_codes & STATUS_NICKNAME_CHANGED)) {
 		egress.type = STANZA_PRESENCE_UNAVAILABLE;
 	}
+
 	if (new_nick) {
 		egress.sys_data.presence.item.nick = *new_nick;
 	}
+
 	egress.user_data = sender->presence;
 	egress.from_nick = sender->nick;
 	egress.from_node = room->node;
@@ -316,17 +319,22 @@ static BOOL room_broadcast_presence(Room *room, Participant *sender, BufferPtr *
 
 	Participant *receiver = 0;
 	DLS_FOREACH(&room->participants, receiver) {
+		egress.to = receiver->jid;
+
+		// Set 'self-presence' code (and include room codes).
 		if (receiver == sender) {
 			egress.sys_data.presence.status_codes = room_config_status_codes(room) | STATUS_SELF_PRESENCE | status_codes;
 		} else {
 			egress.sys_data.presence.status_codes = status_codes;
 		}
-		egress.to = receiver->jid;
+
+		// Attach JID.
 		if (receiver->role == ROLE_MODERATOR || !(room->flags & MUC_FLAG_SEMIANONYMOUS)) {
 			egress.sys_data.presence.item.jid = sender->jid;
 		} else {
 			jid_init(&egress.sys_data.presence.item.jid);
 		}
+
 #ifdef MEWCAT
 		if (!mewcat_handle(room, sender, receiver, &egress)) {
 			continue;
@@ -591,7 +599,7 @@ static void route_presence(Room *room, IncomingPacket *ingress, ACLConfig *acl) 
 		// TODO(artem): check globally registered nickname
 
 		if (room->flags & MUC_FLAG_JUST_CREATED) {
-			affiliationss_add((AffiliationsList **)room->affiliations, 0, AFFIL_OWNER, &ingress->real_from, 0);
+			affiliationss_add(room->affiliations, 0, AFFIL_OWNER, &ingress->real_from, 0);
 		}
 
 		int affiliation;
@@ -636,7 +644,9 @@ static void route_presence(Room *room, IncomingPacket *ingress, ACLConfig *acl) 
 		presence_buffer = sender->presence;
 		sender->presence = ingress->inner;
 	}
-	// TODO(artem): set role = none if type = unavailable
+	if (ingress->type == STANZA_PRESENCE_UNAVAILABLE) {
+		sender->role = ROLE_NONE;
+	}
 	room_broadcast_presence(room, sender, 0, 0);
 
 	if (ingress->type == STANZA_PRESENCE_UNAVAILABLE) {
@@ -645,7 +655,7 @@ static void route_presence(Room *room, IncomingPacket *ingress, ACLConfig *acl) 
 		room_leave(room, sender);
 	} else {
 		if (just_joined) {
-			//history_send(&room->node, history_first_item(&room->history, &muc_node), sender);
+			// TODO(artem): history_send(&room->node, history_first_item(&room->history, &muc_node), sender);
 			room_subject_send(room, sender);
 		}
 
@@ -1045,7 +1055,7 @@ static void route_iq(Room *room, IncomingPacket *ingress, ACLConfig *acl) {
 						return;
 					}
 
-					if (!affiliationss_add((AffiliationsList **)room->affiliations, sender, target.affiliation,
+					if (!affiliationss_add(room->affiliations, sender, target.affiliation,
 								&target.jid, &target.reason_node)) {
 						worker_bounce(ingress, &error_definitions[ERROR_PRIVILEGE_LEVEL], &room->node);
 						return;

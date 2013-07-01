@@ -14,7 +14,7 @@ network.port 8888
 
 ## Authorization options.
 # A hostname to open stream to
-component.hostname conference.localhost
+component.hostname mukite.localhost
 # A password for <handshake>
 component.password secret
 

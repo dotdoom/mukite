@@ -61,7 +61,7 @@ BOOL affiliations_deserialize(AffiliationsList *affiliations, FILE *input) {
 	return TRUE;
 }
 
-BOOL affiliationss_add(AffiliationsList **affiliations, Participant *sender, int affiliation,
+BOOL affiliationss_add(AffiliationsList *affiliations, Participant *sender, int affiliation,
 		Jid *jid, BufferPtr *reason_node) {
 	// Only owner may ADD an affiliation of admin or higher.
 	if (sender && sender->affiliation != AFFIL_OWNER && affiliation >= AFFIL_ADMIN) {
@@ -72,7 +72,7 @@ BOOL affiliationss_add(AffiliationsList **affiliations, Participant *sender, int
 	Affiliation *affiliation_entry = 0;
 	int list;
 	for (list = AFFIL_OUTCAST; list <= AFFIL_OWNER; ++list) {
-		if ((affiliation_entry = affiliations_find_by_jid(affiliations[list], jid, JID_NODE | JID_HOST))) {
+		if ((affiliation_entry = affiliations_find_by_jid(&affiliations[list], jid, JID_NODE | JID_HOST))) {
 			break;
 		}
 	}
@@ -85,13 +85,13 @@ BOOL affiliationss_add(AffiliationsList **affiliations, Participant *sender, int
 		if (list == AFFIL_OWNER &&
 				sender &&
 				jid_cmp(&sender->jid, &affiliation_entry->jid, JID_NODE | JID_HOST) == 0 &&
-				affiliations[AFFIL_OWNER]->head == affiliation_entry &&
+				affiliations[AFFIL_OWNER].head == affiliation_entry &&
 				!affiliation_entry->next) {
 			// Owner trying to revoke own privilege when there are no other owners.
 			return FALSE;
 		}
 
-		DLS_DELETE(affiliations[list], affiliation_entry);
+		DLS_DELETE(&affiliations[list], affiliation_entry);
 
 		if (affiliation == AFFIL_NONE) {
 			free(affiliation_destroy(affiliation_entry));
@@ -105,7 +105,7 @@ BOOL affiliationss_add(AffiliationsList **affiliations, Participant *sender, int
 		}
 		jid_set(&affiliation_entry->jid, jid, JID_NODE | JID_HOST);
 		affiliation_set_reason(affiliation_entry, reason_node);
-		DLS_APPEND(affiliations[affiliation], affiliation_entry);
+		DLS_APPEND(&affiliations[affiliation], affiliation_entry);
 	}
 
 	LDEBUG("set affiliation of '%.*s' to %d",

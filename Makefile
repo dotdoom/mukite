@@ -46,8 +46,8 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -I$(dir $<) -c $< -o $@
 
 $(EXTLIB):
-	cd xmcomp ; $(MAKE)
+	$(MAKE) -C xmcomp
 
 clean:
-	cd xmcomp ; $(MAKE) clean
+	$(MAKE) -C xmcomp clean
 	rm -rf $(BINDIR) $(OBJDIR)

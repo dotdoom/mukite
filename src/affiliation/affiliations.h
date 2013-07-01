@@ -21,7 +21,7 @@ typedef struct {
 } AffiliationsList;
 
 int affiliationss_get_by_jid(AffiliationsList **, ACLConfig *, Jid *);
-BOOL affiliationss_add(AffiliationsList **, Participant *, int affiliation, Jid *, BufferPtr *reason);
+BOOL affiliationss_add(AffiliationsList *, Participant *, int affiliation, Jid *, BufferPtr *reason);
 int affiliation_by_name(BufferPtr *);
 
 BOOL affiliations_serialize(AffiliationsList *, FILE *);
