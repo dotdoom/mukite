@@ -69,7 +69,7 @@ extern const char* log_level_names[];
 #define LWARN(format, ...)  LOG(LOG_WARN,  format, ## __VA_ARGS__)
 #define LERROR(format, ...) LOG(LOG_ERROR, format, ## __VA_ARGS__)
 #define LFATAL(format, ...) { LOG(666, format, ## __VA_ARGS__); exit(1); }
-#define LASSERT(expr, msg_format, ...) { if (!(expr)) { LWARN("Assertion failure for %s:\n" msg_format, #expr, ## __VA_ARGS__) } }
+#define LASSERT(expr, msg_format, ...) { if (!(expr)) { LERROR("Assertion failure for %s:\n" msg_format, #expr, ## __VA_ARGS__) } }
 #define LERRNO(format, errno, ...) LERROR(format ": %s", ## __VA_ARGS__, strerror(errno))
 
 #endif

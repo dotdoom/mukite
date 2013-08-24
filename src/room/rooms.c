@@ -34,7 +34,7 @@ Room *rooms_create_room(Rooms *rooms, BufferPtr *node) {
 	pthread_rwlock_wrlock(&rooms->sync);
 	Room *room = malloc(sizeof(*room));
 	room_init(room, node);
-	HASHS_ADD(rooms, node.data, BPT_SIZE(node), room);
+	HASHS_ADD_KEYPTR(rooms, room->node.data, room->node.size, room);
 	pthread_mutex_lock(&room->sync);
 	pthread_rwlock_unlock(&rooms->sync);
 
@@ -42,6 +42,8 @@ Room *rooms_create_room(Rooms *rooms, BufferPtr *node) {
 }
 
 static void rooms_destroy_room(Rooms *rooms, Room *room) {
+	LINFO("removing room '%.*s'", room->node.size, room->node.data);
+
 	pthread_rwlock_wrlock(&rooms->sync);
 	HASHS_DEL(rooms, room);
 	pthread_rwlock_unlock(&rooms->sync);

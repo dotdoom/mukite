@@ -116,13 +116,13 @@
 	_CONTAINER_DESERIALIZE(list, DLS_APPEND((list), __current__), type, entry_deserializer)
 
 #define HASHS_DESERIALIZE(hash, type, key, key_size, entry_deserializer) \
-	_CONTAINER_DESERIALIZE(hash, HASHS_ADD((hash), key, __current__->key_size, __current__), type, entry_deserializer)
+	_CONTAINER_DESERIALIZE(hash, HASHS_ADD_KEYPTR((hash), __current__->key, __current__->key_size, __current__), type, entry_deserializer)
 
 #define HASHS_ITER(hash, element, tmp) HASH_ITER(hh, (hash)->head, element, tmp)
 
-#define HASHS_ADD(hash, key, key_size, element) \
+#define HASHS_ADD_KEYPTR(hash, key, key_size, element) \
 	{ \
-		HASH_ADD(hh, (hash)->head, key, key_size, element); \
+		HASH_ADD_KEYPTR(hh, (hash)->head, key, key_size, element); \
 		++(hash)->size; \
 	}
 
