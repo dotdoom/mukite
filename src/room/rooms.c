@@ -79,26 +79,29 @@ BOOL rooms_deserialize(Rooms *rooms, FILE *input) {
 }
 
 void rooms_process(Rooms *rooms, IncomingPacket *ingress, ACLConfig *acl) {
-	LDEBUG("searching for the existing room '%.*s'",
-			JID_LEN(&ingress->proxy_to), JID_STR(&ingress->proxy_to));
+	LDEBUG("searching for an existing room '%.*s'",
+			BPT_SIZE(&ingress->proxy_to.node), ingress->proxy_to.node.data);
 
-	pthread_rwlock_rdlock(&rooms->sync);
 	Room *room = 0;
+	pthread_rwlock_rdlock(&rooms->sync);
 	HASHS_FIND(rooms, ingress->proxy_to.node.data, BPT_SIZE(&ingress->proxy_to.node), room);
 	pthread_rwlock_unlock(&rooms->sync);
 
 	if (!room) {
+		LDEBUG("room was not found");
 		if (ingress->type == STANZA_ERROR) {
+			LDEBUG("stanza type error: ignored");
 			return;
 		}
 		if (ingress->name != STANZA_PRESENCE || ingress->type == STANZA_PRESENCE_UNAVAILABLE) {
-			// this is not a presence, or presence type is 'unavailable'
+			LDEBUG("stanza is not a presence (or a presence type 'unavailable') - bouncing back");
 			worker_bounce(ingress, &error_definitions[ERROR_ROOM_NOT_FOUND], 0);
 			return;
 		} else {
 			if (acl_role(acl, &ingress->real_from) >= ACL_MUC_CREATE) {
 				room = rooms_create_room(rooms, &ingress->proxy_to.node);
 			} else {
+				LDEBUG("no permission to create a new room for this user");
 				// TODO(artem): optimization
 				Buffer node;
 				buffer__ptr_cpy(&node, &ingress->proxy_to.node);
