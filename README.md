@@ -19,7 +19,7 @@ or
 ## Handled signals
 * `SIGUSR1`: serialize all data (including current participants)
 * `SIGHUP`: reload config file (only options marked with 'Restart required: NO' will take effect)
-* `SIGTERM`, `SIGQUIT`, `SIGINT` (`^C`): serialize all data and close the connection
+* `SIGTERM`, `SIGQUIT` (`^\`), `SIGINT` (`^C`): serialize all data and close the connection
 
 ## Important
 Due to current implementation limitations, may only work correctly with XML attribute values enclosed in single quotes ( ' ). Works fine with ejabberd.

@@ -8,18 +8,23 @@
 
 ## Network settings.
 # TCP server (resolved with A record)
+# Restart required: NO.
 network.host localhost
 # TCP port
+# Restart required: NO.
 network.port 8888
 
 ## Authorization options.
 # A hostname to open stream to
+# Restart required: NO.
 component.hostname mukite.localhost
 # A password for <handshake>
+# Restart required: NO.
 component.password secret
 
 # Rooms storage file - for (de)serialization.
 # This file is overwritten by issuing signals SIGUSR1, SIGTERM or SIGQUIT.
+# Restart required: NO.
 worker.data_file rooms.dat
 # Number of concurrent worker threads.
 # Range: 1-1024.
@@ -68,8 +73,10 @@ writer.buffer 2097152
 ## 3 = owner in all MUCs
 ## 4 = component admin
 # Default role index.
+# Restart required: NO (but existing users will not be updated).
 acl.default_role 1
 # Data file.
+# Restart required: NO.
 acl.data_file acl.dat.example
 
 ## Logger config
@@ -78,4 +85,5 @@ acl.data_file acl.dat.example
 # 1 - info
 # 2 - warning
 # 3 - error
+# Restart required: NO.
 logger.level 0
