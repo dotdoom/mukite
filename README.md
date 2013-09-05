@@ -23,3 +23,6 @@ or
 
 ## Important
 Due to current implementation limitations, may only work correctly with XML attribute values enclosed in single quotes ( ' ). Works fine with ejabberd.
+
+## License
+3-clause BSD. See [LICENSE](LICENSE) file.
